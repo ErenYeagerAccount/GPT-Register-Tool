@@ -1,85 +1,85 @@
 # GPT-Register-Tool
 
-面向 Windows 的 ChatGPT 账号注册、邮箱 OTP、账号管理、协议支付链接提取与显式支付执行工具。
+A Windows-oriented tool for ChatGPT account registration, email OTP handling, account management, protocol-based payment link extraction, and explicit payment execution.
 
-项目采用 **WPF 桌面端 + Python 业务核心**：桌面端负责操作入口、配置和结果展示，Python 模块负责邮箱、注册、会话、支付、代理与外部服务协议。运行数据默认保存在本机，不写入 Git。
+The project uses a **WPF desktop application + Python business core** architecture. The desktop application provides operation entry points, configuration, and result visualization, while the Python modules handle email, registration, sessions, payments, proxies, and external service protocols. Runtime data is stored locally by default and is not committed to Git.
 
-## 项目说明
+## Project Overview
 
-### 主流程
+### Main Workflow
 
 ```text
-邮箱源
-  -> ChatGPT 邮箱 OTP 注册
-  -> 获取 Access Token / Session，并以稳定 HTTP 200 AT 作为入库边界
-  -> 可选手机验证与 Codex OAuth
-  -> JIT AT 探测/刷新与可选协议支付链接提取
-  -> Session JSON + SQLite 索引
-  -> WPF 桌面端统一管理
+Email Source
+  -> ChatGPT Email OTP Registration
+  -> Obtain Access Token / Session, using a stable HTTP 200 AT as the persistence boundary
+  -> Optional Phone Verification and Codex OAuth
+  -> JIT AT Probe/Refresh and Optional Protocol Payment Link Extraction
+  -> Session JSON + SQLite Index
+  -> Unified Management through the WPF Desktop Application
 ```
 
-### 适用场景
+### Use Cases
 
-- 从邮箱池、ReMail 或 CFWorker 执行批量邮箱注册。
-- 统一轮询 Microsoft、Gmail、iCloud 接码链接、ReMail、CFWorker 等邮箱的 OTP。
-- 管理本地账号、Session、额度状态和支付链接。
-- 按阶段选择代理出口并提取 PayPal 或其他本地支付方式链接。
-- 将账号数据导出为 Codex、CPA、SUB2API 等目标格式。
+* Perform bulk email-based registration using an email pool, ReMail, or CFWorker.
+* Centrally poll OTPs from Microsoft, Gmail, iCloud verification links, ReMail, CFWorker, and other mailbox providers.
+* Manage local accounts, sessions, quota status, and payment links.
+* Select proxy egress by stage and extract PayPal or other local payment method links.
+* Export account data to formats compatible with Codex, CPA, SUB2API, and other targets.
 
-### 技术栈
+### Technology Stack
 
-| 层级 | 技术 |
-| --- | --- |
-| 桌面端 | WPF、.NET 10、C#、Generic Host、CommunityToolkit.Mvvm、WPF-UI |
-| 业务核心 | Python 3、curl_cffi、requests、httpx、PyNaCl（Ed25519） |
-| 数据存储 | JSON、JSONL、SQLite |
-| 邮箱协议 | ReMail API、CFWorker、iCloud 接码链接、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
-| 支付协议 | Stripe Checkout、PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
-| 浏览器辅助 | Playwright、Camoufox、CloakBrowser |
+| Layer              | Technologies                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Desktop            | WPF, .NET 10, C#, Generic Host, CommunityToolkit.Mvvm, WPF-UI                                                       |
+| Business Core      | Python 3, curl_cffi, requests, httpx, PyNaCl (Ed25519)                                                              |
+| Data Storage       | JSON, JSONL, SQLite                                                                                                 |
+| Email Protocols    | ReMail API, CFWorker, iCloud verification links, Microsoft Graph/OAuth, IMAP, Gmail IMAP                            |
+| Payment Protocols  | Stripe Checkout, PayPal, GoPay, GCash, GrabPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, TWINT, Direct Card Checkout, MoMo |
+| Browser Assistance | Playwright, Camoufox, CloakBrowser                                                                                  |
 
-## 安装部署方式
+## Installation and Deployment
 
-### 环境要求
+### Requirements
 
-- Windows 10/11 x64。
-- Python 3.10 或更高版本。
-- `curl_cffi==0.16.0`。注册预检会校验安装版本和 `chrome146` profile；旧版本不会进入邮箱采购或注册阶段。
-- .NET 10 Desktop Runtime；从源码编译时需要 .NET 10 SDK。
-- **Node.js 18+**（`node` 需在 PATH）：Sentinel Token 的 quickjs 提取器用 `node` 运行 OpenAI 真实 `sdk.js`，缺失会导致注册阶段 OTP 静默丢失。
-- **Playwright Chromium**：MoMo/直卡等协议支付的 Stripe init 走 Chromium 网络栈完成 TLS，需执行 `python -m playwright install chromium`。
-- 可正常访问目标邮箱、ChatGPT 和支付服务的网络环境。
-- 注册代理、邮箱收件代理和协议支付代理彼此独立；邮箱收件默认使用本地 `http://127.0.0.1:7897`。
+* Windows 10/11 x64.
+* Python 3.10 or later.
+* `curl_cffi==0.16.0`. The registration preflight check validates both the installed version and the `chrome146` profile. Older versions will not proceed to mailbox purchasing or registration.
+* .NET 10 Desktop Runtime; the .NET 10 SDK is required when building from source.
+* **Node.js 18+** (`node` must be available in PATH): the Sentinel Token QuickJS extractor uses `node` to execute OpenAI's actual `sdk.js`. If Node.js is missing, OTPs may be silently dropped during registration.
+* **Playwright Chromium**: Stripe initialization for protocol payments such as MoMo and Direct Card uses the Chromium network stack for TLS. Install it with `python -m playwright install chromium`.
+* A network environment capable of reaching the target mailbox providers, ChatGPT, and payment services.
+* Registration proxies, mailbox receiving proxies, and protocol payment proxies are independent. Mailbox receiving uses `http://127.0.0.1:7897` by default.
 
-安装依赖后，可运行环境预检确认 Node.js、Playwright Chromium 和关键 Python 包就绪：
+After installing the dependencies, run the environment preflight check to verify that Node.js, Playwright Chromium, and critical Python packages are available:
 
 ```powershell
 python scripts/preflight_env.py
 ```
 
-### 方式一：安装包
+### Option 1: Installer
 
-从 GitHub Releases 下载最新的：
+Download the latest installer from GitHub Releases:
 
 ```text
 GPT-Register-Tool-Setup-vYYYY.MM.DD.exe
 ```
 
-运行安装器并选择安装目录。首次启动前仍需安装 Python 依赖，并创建本地配置：
+Run the installer and select an installation directory. Before the first launch, install the Python dependencies and create the local configuration:
 
 ```powershell
 python -m pip install -r requirements.txt
 copy config.example.json config.json
 ```
 
-### 方式二：便携压缩包
+### Option 2: Portable ZIP
 
-下载并解压：
+Download and extract:
 
 ```text
 GPT-Register-Tool-win-x64-vYYYY.MM.DD.zip
 ```
 
-在解压目录执行：
+Run the following commands from the extracted directory:
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -87,7 +87,7 @@ copy config.example.json config.json
 .\dist\net10\SmsWorkbench.exe
 ```
 
-### 方式三：从源码运行
+### Option 3: Run from Source
 
 ```powershell
 git clone https://github.com/2951461586/GPT-Register-Tool.git
@@ -98,240 +98,259 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
 ```
 
-桌面程序只能通过 `SmsWorkbench/build_dotnet.ps1` 编译。不要直接运行 `dotnet build`，因为它只产生中间文件，不会更新标准工作区 `dist/net10`。
+The desktop application must be built using `SmsWorkbench/build_dotnet.ps1`. Do not run `dotnet build` directly, because it only produces intermediate files and does not update the standard `dist/net10` workspace.
 
-### 首次配置
+### Initial Configuration
 
-打开桌面端的 **设置** 页面，至少完成以下配置：
+Open the **Settings** page in the desktop application and configure at least the following:
 
-1. 在 **网络与支付** 中分别配置注册代理池、邮箱收件代理和协议支付代理池。
-2. 在 **邮箱与收信** 中配置 ReMail、CFWorker 或其他邮箱源。
-3. 按需配置 SMSBower、CPA、SUB2API 和各协议支付参数。
-4. 保存后重新打开对应功能即可使用新配置。
+1. Under **Network & Payments**, configure the registration proxy pool, mailbox receiving proxy, and protocol payment proxy pool separately.
+2. Under **Email & Receiving**, configure ReMail, CFWorker, or another mailbox source.
+3. Configure SMSBower, CPA, SUB2API, and protocol payment parameters as needed.
+4. Save the configuration and reopen the relevant feature to apply the new settings.
 
-ReMail API Key 也可以通过环境变量提供：
+The ReMail API Key can also be provided through an environment variable:
 
 ```powershell
 $env:REMAIL_API_KEY = "rk-your-key"
 ```
 
-环境变量优先于 `config.json`。桌面设置页保存的 API Key 仅写入本地且被 Git 忽略的 `config.json`。
+Environment variables take precedence over `config.json`. API Keys saved through the desktop Settings page are written only to the local, Git-ignored `config.json`.
 
-## 项目功能亮点
+## Key Features
 
-### 一键注册
+### One-Click Registration
 
-- 支持邮箱池、ReMail 短效接码、CFWorker 域名邮箱和 SMSBower 手机号注册。
-- 支持单账号与并发批量注册。
-- 每个注册账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；`_extract_sentinel` 默认允许 2 路并发提取（`sentinel_max_concurrency`，上限 4），兼顾批次速度与 Sentinel 限流风险。
-- 注册流程只负责账号认证并保存 AT/Session，不再生成支付链接。
-- 注册成功判定以 AT 探测 HTTP 200 为准；稳定探测窗口内未持续返回 200 的候选不会进入 active 账号库。
-- 注册流程不再执行 Agent Identity 阶段；需要 Agent Identity 时必须通过显式 SUB2API 导入路径处理。
-- 选中邮箱记录时优先注册所选邮箱；未选中邮箱时显示邮箱源选择器。
-- 注册、OTP、Session 获取和 Codex OAuth 分别记录阶段结果，避免把中间状态误报为成功；支付提链只由独立支付操作触发。
+* Supports registration using email pools, short-lived ReMail verification mailboxes, CFWorker domain mailboxes, and SMSBower phone numbers.
+* Supports both single-account and concurrent bulk registration.
+* Each registration account independently extracts its Sentinel Token and `oai-did`; authentication transactions are never reused across accounts. `_extract_sentinel` allows two concurrent extraction tasks by default through `sentinel_max_concurrency`, with a maximum of four, balancing batch throughput against Sentinel rate-limit risk.
+* The registration flow is responsible only for account authentication and AT/Session persistence. It no longer generates payment links.
+* Registration success is determined by an AT probe returning HTTP 200. Candidates that do not continuously return HTTP 200 during the stability probe window are not added to the active account database.
+* The registration flow no longer executes the Agent Identity stage. Agent Identity must be handled through the explicit SUB2API import path when required.
+* When an email record is selected, registration prioritizes the selected email. If no email is selected, an email source selector is displayed.
+* Registration, OTP, Session acquisition, and Codex OAuth results are recorded separately by stage to prevent intermediate states from being incorrectly reported as successful. Payment link extraction is triggered only through an independent payment operation.
 
-### 协议一致性与恢复
+### Protocol Consistency and Recovery
 
-- CLI 在领取或购买邮箱前依次预检 ChatGPT、Auth 和 Sentinel 三段网络，并从注册代理池选择首条可用线路；TLS、代理或 profile 不满足要求时不会继续消耗邮箱。
-- 每个账号绑定独立代理会话；批量注册只在网络或认证状态故障时切换代理并创建新会话，不把同一事务拆到不同出口。
-- NextAuth、Auth API、ChatGPT 使用各自的 Header 模板，并共享稳定的 `oai-did`、`oai-session-id`、调用 ID、UA 和 client hints。
-- Fingerprint 的语言与时区根据代理 GeoIP 生成；Sentinel QuickJS 使用同一份 UA、平台、时区、屏幕、内存和 client hints。
-- Sentinel 分别生成 `username_password_create`、`authorize_continue`、`oauth_create_account` token。Token、Cookie 和 Header 中的 DID 不一致时按 `sentinel_extract_failed` 终止。
-- 单会话收到 403/429 后打开熔断，冷却期间不继续请求；生产注册不允许纯 HTTP PoW 降级。
-- 创建账号并获得 AT 后立即持久化候选和断点，再执行 AT HTTP 200 探活。代理/TLS 探活失败可以从断点恢复，不重复邮箱 OTP 和账号创建。
+* Before claiming or purchasing a mailbox, the CLI sequentially performs network preflight checks against ChatGPT, Auth, and Sentinel, then selects the first available route from the registration proxy pool. Mailboxes are not consumed when TLS, proxy, or profile requirements are not satisfied.
+* Each account is bound to an independent proxy session. During bulk registration, proxies are switched and new sessions are created only when network or authentication failures occur; a single transaction is not split across different egress routes.
+* NextAuth, Auth API, and ChatGPT use their own Header templates while sharing stable `oai-did`, `oai-session-id`, call ID, UA, and client hints.
+* Fingerprint language and timezone are generated according to proxy GeoIP. Sentinel QuickJS uses the same UA, platform, timezone, screen, memory, and client hints.
+* Sentinel separately generates `username_password_create`, `authorize_continue`, and `oauth_create_account` tokens. If the DID values in the Token, Cookie, and Header do not match, the process terminates with `sentinel_extract_failed`.
+* A circuit breaker is opened after a session receives HTTP 403/429. No additional requests are made during the cooldown period. Production registration does not allow a plain HTTP PoW fallback.
+* After account creation and AT acquisition, the candidate and checkpoint are persisted immediately before running the HTTP 200 AT liveness probe. Proxy/TLS liveness failures can resume from the checkpoint without repeating the email OTP or account creation stages.
 
-### ReMail 邮箱源
+### ReMail Email Source
 
-- 一键注册来源中提供 `ReMail 长效邮箱`，统一使用 `purchase` 长效邮箱模式。
-- 支持单笔或批量创建邮箱订单。
-- 百账号批量下单默认按每个邮箱 2 秒扩展 HTTP 等待时间（至少 30 秒），可通过 `email_registration.remail.batch_timeout` 覆盖。
-- 支持 `private_first`、`public_only` 库存策略。
-- 支持指定项目、产品和邮箱后缀。
-- 使用 `Idempotency-Key` 防止重试导致重复订单。
-- 订单创建使用 API Key；收件使用独立的邮箱地址与 Service Token。
-- Service Token 返回 401 时会用 API Key 查询所属订单；如服务端返回新 Token，会保存到 Session JSON 和 SQLite 后重试一次。
-- `code` 订单只能在 `receiveUntil` 前收件，API Key 不能代替过期的 Service Token；需要后续持续查看收件箱时请选择 `purchase`。
-- 邮件摘要无验证码时自动读取邮件详情，并执行时间、收件人、消息 ID 和已排除验证码过滤。
-- ReMail 返回可信 OpenAI 发件人的结构化六位验证码时，会校验精确收件人和时间戳；即使本地化主题发生乱码，也不会误等到超时。
-- 桌面端可从 ReMail 注册记录打开收件箱；查看模式会读取邮件完整正文和验证码。
-- 日志会脱敏 API Key 和 Service Token。
-- 自适应 OTP 轮询：初始延迟 1s，渐进退避（1s → 1.5s → 3s），根据邮件到达状态和服务器限流建议动态调整轮询间隔，减少无效请求。
-- ReMail 收件时间允许默认 90s 的服务端时钟偏差；消息 ID 快照仍会阻止旧验证码被重复使用。
-- ReMail 在 30s 内仍未收到验证码时会重发一次，剩余时间继续接受本次事务中的最新验证码。
-- 已有 ReMail 订单可按 `remail://email---serviceToken---orderNo---purchaseId` 写入邮箱 Token 文件恢复使用，无需重复购买。
-- 批量购买遇到超时或可重试 5xx 时，会先按请求时间窗、项目、产品和数量严格匹配新订单；仅在恰好匹配时自动恢复，避免响应丢失后重复购买。
-- `ReMail 长效邮箱` 会按注册数量补足稳定 HTTP 200 AT，桌面端使用默认采购上限并自动管理注册批次；该模式默认启用 SMSBower 手机验证。CLI 仍可通过 `--max-mailbox-purchases` 和 `--max-remail-cost` 设置额外限制。
+* The one-click registration source includes `ReMail Persistent Mailbox`, which consistently uses the `purchase` persistent mailbox mode.
+* Supports both single and bulk mailbox order creation.
+* For batches of approximately 100 accounts, the default HTTP timeout scales by two seconds per mailbox, with a minimum of 30 seconds. This can be overridden using `email_registration.remail.batch_timeout`.
+* Supports `private_first` and `public_only` inventory strategies.
+* Supports selecting specific projects, products, and email suffixes.
+* Uses `Idempotency-Key` to prevent retries from creating duplicate orders.
+* Order creation uses the API Key, while receiving mail uses the mailbox address and a separate Service Token.
+* If a Service Token returns HTTP 401, the API Key is used to query the associated order. If the server returns a new Token, it is saved to the Session JSON and SQLite database before retrying once.
+* `code` orders can receive messages only before `receiveUntil`. The API Key cannot replace an expired Service Token. Use `purchase` when continued inbox access is required.
+* If an email summary does not contain a verification code, the full message is automatically retrieved and filtered by timestamp, recipient, message ID, and previously excluded verification codes.
+* When ReMail returns a structured six-digit verification code from a trusted OpenAI sender, the exact recipient and timestamp are validated. This avoids unnecessary timeouts even when localized subjects are garbled.
+* The desktop application can open the inbox from a ReMail registration record. View mode retrieves the complete message body and verification code.
+* API Keys and Service Tokens are redacted in logs.
+* Adaptive OTP polling uses an initial 1-second delay with progressive backoff (`1s → 1.5s → 3s`). The polling interval is dynamically adjusted according to message arrival status and server rate-limit recommendations, reducing unnecessary requests.
+* ReMail receiving allows a default server clock skew of 90 seconds. Message ID snapshots still prevent old verification codes from being reused.
+* If ReMail has not received the verification code within 30 seconds, one resend is triggered. During the remaining time, the latest verification code belonging to the current transaction is accepted.
+* Existing ReMail orders can be restored from an email Token file using `remail://email---serviceToken---orderNo---purchaseId`, without purchasing them again.
+* If a bulk purchase encounters a timeout or retryable 5xx response, the system first strictly matches new orders by request time window, project, product, and quantity. Automatic recovery occurs only when exactly one matching order is found, preventing duplicate purchases after a lost response.
+* `ReMail Persistent Mailbox` continues purchasing until the requested number of stable HTTP 200 ATs is reached. The desktop application uses a default purchasing limit and automatically manages registration batches. SMSBower phone verification is enabled by default in this mode. The CLI can still impose additional limits through `--max-mailbox-purchases` and `--max-remail-cost`.
 
-### 统一邮箱与 OTP
+### Unified Email and OTP Handling
 
-统一 mailbox seam 支持：
+The unified mailbox seam supports:
 
-- ReMail。
-- CFWorker 域名邮箱。
-- Microsoft Graph/OAuth。
-- Outlook/Hotmail IMAP 回退。
-- Gmail IMAP 与 SMTP。
-- iCloud 接码链接，桌面端“导入邮箱”和后端均支持 `email----接码URL` 和 `email---接码URL`。
-- Chatai、token 文件及历史邮箱池格式。
+* ReMail.
+* CFWorker domain mailboxes.
+* Microsoft Graph/OAuth.
+* Outlook/Hotmail IMAP fallback.
+* Gmail IMAP and SMTP.
+* iCloud verification links. Both the desktop application's "Import Email" feature and the backend support `email----verificationURL` and `email---verificationURL`.
+* Chatai, token files, and historical email pool formats.
 
-OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务端时间戳过滤和候选排序。
+OTP parsing supports subject matching, sender filtering, exact recipient matching, server timestamp filtering, and candidate sorting.
 
-### 协议支付提链
+### Protocol Payment Link Extraction
 
-- 支持 PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
-- BLIK 会提交一次性六位码并直接执行支付，只在单账号协议支付弹窗/命令中提供，不进入注册后自动提链或批量支付选择器。
-- 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
-- MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
-- GoPay（印尼 ID/IDR）、GCash 和 GrabPay（菲律宾 PH/PHP）复用同一个钱包适配器：Checkout → Stripe init → 建钱包 PM → Confirm → Approve → Poll → 校验 Provider Redirect。三者只在地区、币种、locale 和最终域名白名单上分型。
-- PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。
-- PayPal 回跳对账由独立 `paypal_reconciliation.py` 处理，只跟踪白名单内的 Stripe Return → OpenAI Pay → Checkout Verify，并输出脱敏的 `conclusive`/`unknown`/`failed` 证据；它不改变提链接口，也不生成或覆盖支付链接。
-- 支持 `checkout`、`approve`、`update` 分段代理。
-- 动态代理会按支付方法自动改写国家与 Session，支持 US、JP、VN、ID、IN、NL、BR、KR、PL、CH、PH 等目标出口。
-- 协议支付代理池按顺序探测，当前代理不可用或出口国家不匹配时自动切换下一条。
-- 地区和代理选择保存为历史记录。
-- 支持实际测试代理出口 IP、国家及预期地区是否匹配。
-- 严格区分 Checkout、PM 创建、Confirm、首次 Poll、最终 Provider Redirect 等阶段。
-- 通用提链终态为 `completed`、`failed`、`cancelled`、`unknown`、`timed_out`，每条结果都有 `retryable` 和 `error_stage`。`unknown` 会额外标记 `requires_reconciliation=true`，在完成对账前禁止自动重试；`cancelled` 不重试，普通 `timed_out` 可按策略重试。
-- 批量提链应先用本地额度接口筛出非 401 账号，再执行支付协议；报告必须分别统计 AT 可用、套餐/试用资格、支付方式可见、Approve 成功和最终链接/二维码产物。
-- MoMo 只有在返回 `ready_with_qr` 且产出 `payment.momo.vn` URL 或二维码文件时才算成功；`account_trial_ineligible`、`card_only_full_price` 和 `approve_result_blocked` 都是明确失败状态。
+* Supports PayPal, GoPay, GCash, GrabPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, TWINT, Direct Card Checkout, and MoMo.
 
-- 批量支付执行器支持 JIT AT、HTTP 401 分层恢复（RT、Cookie、隔离浏览器邮箱 OTP、Codex OAuth）、资格探测、Canary 暂停、方法级并发、瞬态重试、原子断点和同批次续跑。
-- MoMo 按 Checkout、Promotion、Stripe Provider、Approve、Redirect 分阶段使用代理；Kakao 输出结构化结果，只有明确的 Kakao/Nicepay Redirect 才算链接成功。
+* BLIK submits a one-time six-digit code and directly executes the payment. It is available only in the single-account protocol payment dialog/command and is not included in post-registration automatic link extraction or the bulk payment selector.
 
-### Agent Identity 与 SUB2API 导入边界
+* Direct Card Checkout (Philippines, PH/PHP): performs US order creation → TR promotion refresh → zero-amount validation, producing a long direct card checkout URL in the form `chatgpt.com/checkout/<entity>/<cs_id>`.
 
-- 注册主流程已移除 Agent Identity/task 阶段，不会因为 Agent Identity 失败改变 AT 200 注册结果。
-- 已存在的 Agent Identity JSON 仍可由显式 SUB2API 导入路径读取；新建/重建也只能通过该导入流程触发。
-- Agent Identity 使用 Ed25519 PKCS#8 私钥，独立保存到 `sessions/agent_identities/`，私钥不写入日志。
-- 支持通过 `--register-and-import` 在注册完成后自动导入 SUB2API。
-- SUB2API 导入支持 `auto`、`oauth`、`agent_identity` 三种凭据模式；它们只影响导入边界，不会重新插入注册阶段。
-- SUB2API 导出格式兼容 Go 后端，`expires_at` 字段使用 Unix 时间戳（int64）。
-- 可通过 `--sub2api-no-verify` 跳过导入后的连通性验证。
+* MoMo (Vietnam, VN/VND): order creation → Stripe init → enforce ₫0 → create MoMo PM → Confirm → Approve → follow redirect, producing a scannable `payment.momo.vn` QR code. The QR code is automatically decoded to PNG for use with "Open QR Code."
 
-### 账号与数据管理
+* GoPay (Indonesia, ID/IDR), GCash, and GrabPay (Philippines, PH/PHP) reuse the same wallet adapter: Checkout → Stripe init → create wallet PM → Confirm → Approve → Poll → validate Provider Redirect. They differ only by region, currency, locale, and final-domain allowlist.
 
-- Session JSON 与 SQLite 双层索引。
-- 账号状态、AT（已获取/未获取/401失效）、RT、支付链接和手机号验证结果集中展示。
-- 左侧栏“账号测活”负责 AT/额度健康检查；HTTP 401 会在显式恢复或支付 JIT 流程中依次尝试 RT、Cookie、隔离浏览器邮箱 OTP 和 Codex OAuth。
-- 支持复制 AT、查看邮箱、重新注册和重新生成支付链接。
-- 支持 Codex JSON、CPA、SUB2API 等导入导出流程。
-- 账号列表保留注册地区、注册批次和入库状态，便于按 cohort 选择批量支付账号。
-- 本地数据默认保存在 `sessions/` 和 `runtime/`，两者均被 Git 忽略。
+* PayPal supports Hosted long URLs, direct PP links, and forced zero-cost trial mode.
 
-### 桌面端批量支付操作
+* PayPal return reconciliation is handled independently by `paypal_reconciliation.py`. It follows only allowlisted Stripe Return → OpenAI Pay → Checkout Verify transitions and outputs redacted `conclusive` / `unknown` / `failed` evidence. It does not modify the link extraction interface or generate/overwrite payment links.
 
-1. 在账号列表勾选要处理的账号，打开左侧“批量协议支付”或右键同名菜单。
-2. 选择 MoMo、Kakao、直卡 Checkout 等提链方式，设置并发、瞬态重试、Canary 数量、批次 ID 和代理 Seed。
-3. 默认开启“401 自动恢复”；勾选“仅探测资格”后会完成 JIT AT、注册地区矩阵、ChatGPT Checkout 和 Stripe init，然后在创建 PM、Confirm、Approve 和 Provider Redirect 前停止。结果会明确记录金额、币种、支付方式可见性和 `eligible`/`ineligible`/`unknown` 分类。
-4. 通过“账号地区 / 支付资格矩阵”确认注册区、Checkout、Promotion、Provider、Approve 和 Redirect 的地区组合。
-5. 相同模式、矩阵、代理与重试参数下重复使用同一批次 ID，可读取 `runtime/payment_batches/` 的原子断点并继续执行；运行参数变化时签名失配会重新执行，探测结果不会被正式支付复用。系统性的 `unknown` Canary 会暂停该方法后续完整批次，明确的支付方式不可用或非零报价不会误判为协议故障。报告会分开显示 AT 200、JIT 刷新、能力探测、资格、链接、二维码和失败计数。
+* Supports segmented `checkout`, `approve`, and `update` proxies.
 
-### 手机接码
+* Dynamic proxies automatically rewrite the target country and Session according to the payment method, supporting US, JP, VN, ID, IN, NL, BR, KR, PL, CH, PH, and other egress regions.
 
-- 支持 SMSBower 国家与价格档位查询。
-- 支持发送重试、等待超时和轮询间隔配置。
-- 支持 Codex OAuth 手机验证和账号刷新流程。
-- 批量操作保持邮箱与手机号结果映射，便于排查单账号失败。
+* The protocol payment proxy pool is probed sequentially. If the current proxy is unavailable or its egress country does not match the requested country, the next proxy is selected automatically.
 
-## 项目架构
+* Region and proxy selections are stored in history.
 
-### 分层结构
+* Supports actual testing of proxy egress IP, country, and expected-region matching.
+
+* Strictly distinguishes Checkout, PM creation, Confirm, initial Poll, and final Provider Redirect stages.
+
+* Generic link extraction terminal states are `completed`, `failed`, `cancelled`, `unknown`, and `timed_out`. Every result includes `retryable` and `error_stage`. `unknown` additionally sets `requires_reconciliation=true`, preventing automatic retries until reconciliation is completed. `cancelled` is not retried, while ordinary `timed_out` results can be retried according to policy.
+
+* Before running bulk link extraction, the local quota endpoint should be used to filter out HTTP 401 accounts. Reports must separately count AT availability, plan/trial eligibility, payment method visibility, successful Approve operations, and final link/QR artifacts.
+
+* MoMo is considered successful only when it returns `ready_with_qr` and produces either a `payment.momo.vn` URL or QR code file. `account_trial_ineligible`, `card_only_full_price`, and `approve_result_blocked` are explicit failure states.
+
+* The bulk payment executor supports JIT AT, layered HTTP 401 recovery (RT, Cookie, isolated-browser email OTP, Codex OAuth), eligibility probing, Canary pausing, per-method concurrency, transient retries, atomic checkpoints, and same-batch resume.
+
+* MoMo uses stage-specific proxies for Checkout, Promotion, Stripe Provider, Approve, and Redirect. Kakao produces structured results and considers link extraction successful only when an explicit Kakao/Nicepay Redirect is obtained.
+
+### Agent Identity and SUB2API Import Boundary
+
+* The Agent Identity/task stage has been removed from the primary registration flow. Agent Identity failures do not affect HTTP 200 AT registration results.
+* Existing Agent Identity JSON can still be consumed by the explicit SUB2API import path. Creating or rebuilding an Agent Identity can only be triggered through that import flow.
+* Agent Identity uses an Ed25519 PKCS#8 private key stored separately under `sessions/agent_identities/`. Private keys are never written to logs.
+* `--register-and-import` can be used to automatically import into SUB2API after registration.
+* SUB2API import supports three credential modes: `auto`, `oauth`, and `agent_identity`. These modes affect only the import boundary and do not reinsert Agent Identity into the registration stage.
+* The SUB2API export format is compatible with the Go backend. The `expires_at` field uses a Unix timestamp (`int64`).
+* `--sub2api-no-verify` can be used to skip post-import connectivity verification.
+
+### Account and Data Management
+
+* Dual-layer indexing using Session JSON and SQLite.
+* Centralized display of account status, AT state (obtained/not obtained/HTTP 401 invalid), RT, payment links, and phone verification results.
+* The left-side **Account Liveness Check** performs AT/quota health checks. HTTP 401 accounts are recovered through RT, Cookie, isolated-browser email OTP, and Codex OAuth, in that order, during explicit recovery or payment JIT flows.
+* Supports copying ATs, viewing mailboxes, re-registering, and regenerating payment links.
+* Supports Codex JSON, CPA, SUB2API, and other import/export workflows.
+* Account records retain registration region, registration batch, and persistence status, making it easier to select bulk-payment accounts by cohort.
+* Local data is stored under `sessions/` and `runtime/` by default. Both directories are ignored by Git.
+
+### Desktop Bulk Payment Operations
+
+1. Select the accounts to process from the account list, then open **Bulk Protocol Payment** from the left sidebar or the context menu.
+2. Select a link extraction method such as MoMo, Kakao, or Direct Card Checkout, and configure concurrency, transient retries, Canary count, batch ID, and proxy Seed.
+3. **Automatic 401 Recovery** is enabled by default. When **Eligibility Probe Only** is selected, the process completes JIT AT, registration-region matrix evaluation, ChatGPT Checkout, and Stripe init, then stops before PM creation, Confirm, Approve, and Provider Redirect. Results explicitly record amount, currency, payment method visibility, and `eligible` / `ineligible` / `unknown` classification.
+4. Use the **Account Region / Payment Eligibility Matrix** to verify the registration, Checkout, Promotion, Provider, Approve, and Redirect region combination.
+5. Reusing the same batch ID with the same mode, matrix, proxy, and retry parameters loads the atomic checkpoint from `runtime/payment_batches/` and resumes execution. If runtime parameters change, the signature no longer matches and the batch is executed again. Probe results are not reused for actual payment execution. Systematic `unknown` Canary results pause subsequent full batches for that method. Explicitly unavailable payment methods or non-zero quotes are not incorrectly classified as protocol failures. Reports separately display AT 200, JIT refresh, capability probe, eligibility, link, QR code, and failure counts.
+
+### Phone Verification
+
+* Supports SMSBower country and price-tier queries.
+* Supports configurable send retries, wait timeouts, and polling intervals.
+* Supports Codex OAuth phone verification and account refresh workflows.
+* Bulk operations preserve email-to-phone result mappings, making single-account failures easier to troubleshoot.
+
+## Project Architecture
+
+### Layered Structure
 
 ```text
 SmsWorkbench/
-  WPF 桌面端
-  -> Generic Host / DI 组合根
-  -> 渐进式 MVVM 页面、配置、列表、任务启动、状态展示
+  WPF Desktop Application
+  -> Generic Host / DI Composition Root
+  -> Progressive MVVM pages, configuration, lists, task launching, status display
 
 IBackendClient
-  -> ArgumentList + 取消/超时/进程树终止
-  -> @@SMSWORKBENCH_IPC_V1@@ 单行版本化结果信封
+  -> ArgumentList + cancellation/timeout/process-tree termination
+  -> @@SMSWORKBENCH_IPC_V1@@ single-line versioned result envelope
 
 sms_tool/cli.py
-  CLI 与任务编排
-  -> 参数解析、批量任务、进程退出状态
+  CLI and task orchestration
+  -> Argument parsing, batch tasks, process exit status
 
 sms_tool/registration.py
-  注册主流程
-  -> 邮箱 OTP、账号创建、Session、Codex OAuth
+  Primary registration flow
+  -> Email OTP, account creation, Session, Codex OAuth
 
 sms_tool/registration_concurrency.py
-  注册阶段资源门控
-  -> 网络、AT 探测和支付阶段并发上限与等待指标
+  Registration-stage resource gating
+  -> Network, AT probe, and payment-stage concurrency limits and wait metrics
 
 sms_tool/account_liveness.py / account_recovery.py
-  账号存活与恢复
-  -> 无副作用额度探测、显式 OAuth 恢复和状态持久化
+  Account liveness and recovery
+  -> Side-effect-free quota probing, explicit OAuth recovery, and state persistence
 
 sms_tool/payment_auth.py / payment_batch.py
-  JIT AT 门禁与批量协议支付
-  -> 401 分层恢复、Checkout/Stripe 能力探测、资格矩阵、Canary、重试、断点报告
+  JIT AT gate and bulk protocol payments
+  -> Layered 401 recovery, Checkout/Stripe capability probing, eligibility matrix,
+     Canary, retries, checkpoint reports
 
 sms_tool/checkout_contract.py / payment_capability.py
-  统一 Checkout 契约与支付方式能力探测
-  -> 地区/币种/locale、Stripe init、金额与支付方式目录归一化
+  Unified Checkout contract and payment-method capability probing
+  -> Region/currency/locale, Stripe init, amount, and payment-method catalog normalization
 
 sms_tool/wallet_provider.py / wallet_transport.py
-  GoPay、GCash、GrabPay 共用钱包适配器
-  -> PM、Confirm、Approve、Poll、Provider Redirect 与分阶段代理
+  Shared wallet adapter for GoPay, GCash, and GrabPay
+  -> PM, Confirm, Approve, Poll, Provider Redirect, and stage-specific proxies
 
 sms_tool/mailbox.py
-  邮箱统一路由
+  Unified mailbox routing
   -> ReMail / CFWorker / Graph / IMAP / Gmail
 
 sms_tool/payment_link_manager.py
-  协议支付管理器
-  -> 方法注册、分段代理、五种终态、retryable/error_stage 统一结果
+  Protocol payment manager
+  -> Method registration, segmented proxies, five terminal states,
+     unified retryable/error_stage results
 
 sms_tool/paypal_reconciliation.py
-  独立 PayPal 回跳对账
-  -> 白名单跳转状态机、秘密脱敏、结论/未知分类
+  Independent PayPal return reconciliation
+  -> Allowlisted redirect state machine, secret redaction,
+     conclusive/unknown classification
 
 sms_tool/storage.py
-  数据持久化
-  -> Session JSON、SQLite、状态与去重
+  Data persistence
+  -> Session JSON, SQLite, state, and deduplication
 
 services/
-  可选本地协议服务
-  -> 邮件诊断、其他支付提取器
+  Optional local protocol services
+  -> Mail diagnostics, additional payment extractors
 ```
 
-### 核心模块
+### Core Modules
 
-| 模块 | 职责 |
-| --- | --- |
-| `SmsWorkbench/` | WPF 桌面界面、设置页、任务入口和本地状态展示 |
-| `sms_tool/cli.py` | CLI 参数与高层任务编排 |
-| `sms_tool/registration.py` | ChatGPT 注册、OTP、Session 和后续验证 |
-| `sms_tool/registration_concurrency.py` | 注册阶段资源组、并发门控与等待指标 |
-| `sms_tool/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
-| `sms_tool/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
-| `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
-| `sms_tool/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
-| `sms_tool/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |
-| `sms_tool/mailbox_graph.py` | Microsoft OAuth 与 Graph 边界 |
-| `sms_tool/mailbox_gmail.py` | Gmail IMAP/SMTP 与 OAuth |
-| `sms_tool/mailbox_icloud_url.py` | iCloud 接码链接收件、HTML/API 正文解析与 OTP 归一化 |
-| `sms_tool/payment_link_manager.py` | 支付方法注册、状态机与统一结果 |
-| `sms_tool/checkout_contract.py` | ChatGPT Checkout、Stripe init 请求/响应与支付方式能力证据契约 |
-| `sms_tool/payment_capability.py` | 只到 Checkout + Stripe init 的通用能力探测 |
-| `sms_tool/wallet_provider.py` | GoPay、GCash、GrabPay 共用编排与结构化结果 |
-| `sms_tool/wallet_transport.py` | 钱包真实 HTTP、分阶段代理和 Provider Redirect 校验 |
-| `sms_tool/gen_pp_link.py` | PayPal/Stripe Checkout 与链接生成 |
-| `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
-| `sms_tool/paypal_reconciliation.py` | 与提链独立的 PayPal 商户回跳对账和脱敏证据 |
-| `sms_tool/storage.py` | SQLite、Session 索引和状态持久化 |
-| `sms_tool/agent_identity.py` | 显式 SUB2API Agent Identity 凭据转换、Ed25519 密钥生成与持久化 |
-| `sms_tool/sub2api_import.py` | SUB2API 导入（多认证模式） |
-| `sms_tool/session_converter.py` | 多格式账号与 Session 转换 |
-| `sms_tool/payment_auth.py` | 支付前 AT 探测、401 分层恢复与安全遥测 |
-| `sms_tool/payment_batch.py` | 批量协议支付、资格矩阵、Canary、重试与原子断点 |
-| `sms_tool/registration_progress.py` | 注册阶段进度跟踪与持久化 |
-| `sms_tool/error_classification.py` | 错误类型分类与重试/报告规范化 |
+| Module                                 | Responsibility                                                                                       |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `SmsWorkbench/`                        | WPF desktop UI, Settings page, task entry points, and local status display                           |
+| `sms_tool/cli.py`                      | CLI arguments and high-level task orchestration                                                      |
+| `sms_tool/registration.py`             | ChatGPT registration, OTP, Session, and subsequent verification                                      |
+| `sms_tool/registration_concurrency.py` | Registration-stage resource groups, concurrency gating, and wait metrics                             |
+| `sms_tool/account_liveness.py`         | `/backend-api/wham/usage` liveness probing, response classification, and quota parsing               |
+| `sms_tool/account_recovery.py`         | Local quota refresh, layered 401 recovery, candidate AT validation, and disabled-account persistence |
+| `sms_tool/mailbox.py`                  | Mailbox provider routing and unified OTP polling                                                     |
+| `sms_tool/mailbox_remail.py`           | ReMail ordering, receiving, message detail retrieval, and OTP extraction                             |
+| `sms_tool/mailbox_cfworker.py`         | CFWorker mailbox creation and receiving                                                              |
+| `sms_tool/mailbox_graph.py`            | Microsoft OAuth and Graph boundary                                                                   |
+| `sms_tool/mailbox_gmail.py`            | Gmail IMAP/SMTP and OAuth                                                                            |
+| `sms_tool/mailbox_icloud_url.py`       | iCloud verification-link receiving, HTML/API body parsing, and OTP normalization                     |
+| `sms_tool/payment_link_manager.py`     | Payment method registration, state machine, and unified results                                      |
+| `sms_tool/checkout_contract.py`        | ChatGPT Checkout, Stripe init request/response, and payment-method capability evidence contract      |
+| `sms_tool/payment_capability.py`       | Generic capability probing limited to Checkout + Stripe init                                         |
+| `sms_tool/wallet_provider.py`          | Shared GoPay, GCash, and GrabPay orchestration and structured results                                |
+| `sms_tool/wallet_transport.py`         | Wallet HTTP transport, stage-specific proxies, and Provider Redirect validation                      |
+| `sms_tool/gen_pp_link.py`              | PayPal/Stripe Checkout and link generation                                                           |
+| `sms_tool/paypal_proxy.py`             | Segmented proxies, region rotation, and egress probing                                               |
+| `sms_tool/paypal_reconciliation.py`    | PayPal merchant-return reconciliation and redacted evidence, independent from link extraction        |
+| `sms_tool/storage.py`                  | SQLite, Session indexing, and state persistence                                                      |
+| `sms_tool/agent_identity.py`           | Explicit SUB2API Agent Identity credential conversion, Ed25519 key generation, and persistence       |
+| `sms_tool/sub2api_import.py`           | SUB2API import with multiple authentication modes                                                    |
+| `sms_tool/session_converter.py`        | Multi-format account and Session conversion                                                          |
+| `sms_tool/payment_auth.py`             | Pre-payment AT probing, layered 401 recovery, and security telemetry                                 |
+| `sms_tool/payment_batch.py`            | Bulk protocol payments, eligibility matrix, Canary, retries, and atomic checkpoints                  |
+| `sms_tool/registration_progress.py`    | Registration-stage progress tracking and persistence                                                 |
+| `sms_tool/error_classification.py`     | Error classification and retry/report normalization                                                  |
 
-更详细的边界说明参见 [docs/architecture.md](docs/architecture.md)，目录职责参见 [docs/directory-map.md](docs/directory-map.md)。
+For more detailed boundary definitions, see `docs/architecture.md`. For directory responsibilities, see `docs/directory-map.md`.
 
-## 核心配置
+## Core Configuration
 
 ### ReMail
 
@@ -357,7 +376,7 @@ services/
 }
 ```
 
-### 注册与收件代理
+### Registration and Mailbox Proxies
 
 ```json
 {
@@ -370,9 +389,11 @@ services/
 }
 ```
 
-注册流量走 JP 动态代理（`proxy.registration` / `proxy.pool`），worker 会刷新动态 Session 使各并发出口 IP 不同；邮箱 OTP 收取固定走 `mailbox_proxy`（默认 `http://127.0.0.1:7897`），不会继承注册代理；支付流量走独立的 `paypal.stage_proxies` / `protocol_payments.proxy_pool`。三者互不覆盖，详情可在桌面端 **设置 → 网络与支付** 的网络代理配置中查看和修改。
+Registration traffic uses JP dynamic proxies (`proxy.registration` / `proxy.pool`). Workers refresh dynamic Sessions so concurrent workers use different egress IPs. Email OTP retrieval always uses the fixed `mailbox_proxy` (default: `http://127.0.0.1:7897`) and does not inherit the registration proxy. Payment traffic uses the independent `paypal.stage_proxies` / `protocol_payments.proxy_pool`.
 
-### 协议支付代理池
+These three proxy groups do not override one another. Their configuration can be viewed and modified under **Settings → Network & Payments** in the desktop application.
+
+### Protocol Payment Proxy Pool
 
 ```json
 {
@@ -385,9 +406,9 @@ services/
 }
 ```
 
-协议支付池与注册代理池相互独立。提链时会按支付地区改写 `region-XX` 或密码中的国家和动态 Session；显式传入 `--proxy` 或分段代理时才覆盖协议池。
+The protocol payment proxy pool is independent from the registration proxy pool. During link extraction, `region-XX` or the country and dynamic Session encoded in the password are rewritten according to the target payment region. The protocol pool is overridden only when `--proxy` or an explicit stage-specific proxy is supplied.
 
-### JIT AT 与批量支付
+### JIT AT and Bulk Payments
 
 ```json
 {
@@ -412,9 +433,11 @@ services/
 }
 ```
 
-HTTP 401 的支付账号按 OAuth Refresh Token、现有 Cookie `/api/auth/session`、隔离浏览器邮箱 OTP、Codex OAuth 的顺序恢复。每个候选 AT 只有再次探测为 HTTP 200 才会写入 Session JSON 和 SQLite。浏览器上下文按账号隔离并校验登录邮箱；`account_deactivated` 归类为永久失败，不会反复重登。
+Payment accounts returning HTTP 401 are recovered in the following order: OAuth Refresh Token, existing Cookie `/api/auth/session`, isolated-browser email OTP, and Codex OAuth. A candidate AT is written to Session JSON and SQLite only after it has again passed an HTTP 200 probe.
 
-### SUB2API 导入
+Browser contexts are isolated by account and validate the logged-in email address. `account_deactivated` is classified as a permanent failure and does not trigger repeated login attempts.
+
+### SUB2API Import
 
 ```json
 {
@@ -425,93 +448,92 @@ HTTP 401 的支付账号按 OAuth Refresh Token、现有 Cookie `/api/auth/sessi
 }
 ```
 
-`auth_mode` 可选 `auto`、`oauth`、`agent_identity`；Agent Identity 仅在显式 SUB2API 导入边界使用。`verify_after_import` 控制导入后是否执行连通性验证。
+Supported `auth_mode` values are `auto`, `oauth`, and `agent_identity`. Agent Identity is used only at the explicit SUB2API import boundary. `verify_after_import` controls whether connectivity verification is performed after import.
 
-### 应急环境变量覆盖
+### Emergency Environment Variable Overrides
 
-当 OpenAI 轮换 Stripe publishable key 或 Sentinel SDK 版本、导致支付提链或注册 OTP 失败时，可用环境变量临时覆盖，无需改代码：
+If OpenAI rotates the Stripe publishable key or Sentinel SDK version and this causes payment link extraction or registration OTP failures, environment variables can temporarily override the values without modifying the code:
 
-- `PP_STRIPE_PUBLISHABLE_KEY`：统一覆盖协议支付回退用的 Stripe publishable key（`sms_tool/gen_pp_link.py` 与 `services/protocol-payment/momo/ac_paylink_core.py` 两处共用）。checkout 响应通常自带该 key，仅在响应缺失时用到回退值；回退时会打印 WARN 日志。
-- `OPENAI_SENTINEL_VERSION`：覆盖 Sentinel SDK 版本（默认值内置于 `sms_tool/sentinel_quickjs.py`）。SDK 下载返回 403/404 通常表示当前版本已被轮换失效，更新此变量或 config 的 `sentinel_version` 即可。
+* `PP_STRIPE_PUBLISHABLE_KEY`: globally overrides the fallback Stripe publishable key used by protocol payments. It is shared by `sms_tool/gen_pp_link.py` and `services/protocol-payment/momo/ac_paylink_core.py`. Checkout responses normally include this key, so the fallback is used only when the response omits it. A WARN log is emitted when the fallback is used.
+* `OPENAI_SENTINEL_VERSION`: overrides the Sentinel SDK version. The default value is built into `sms_tool/sentinel_quickjs.py`. An HTTP 403/404 while downloading the SDK usually indicates that the current version has been rotated out. Update this variable or the `sentinel_version` configuration value.
 
-启动前可运行 `python scripts/preflight_env.py` 检出 Node.js、Playwright Chromium 与关键 Python 包是否就绪。
+Before launching, run `python scripts/preflight_env.py` to verify Node.js, Playwright Chromium, and critical Python packages.
 
-## 常用操作
+## Common Operations
 
-### ReMail 短效接码注册（仅 CLI）
+### ReMail Short-Lived Verification Registration (CLI Only)
 
 ```powershell
 python chatgpt_phone_reg.py --remail-service-mode code --count 1 --workers 1 --registration-at-only --no-phone-reuse
 ```
 
-### ReMail 长效邮箱注册并进行 SMSBower 手机验证
+### ReMail Persistent Mailbox Registration with SMSBower Phone Verification
 
 ```powershell
 python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --target-at200 40 --max-mailbox-purchases 80 --workers 10 --phone-reuse --phone-source smsbower
 ```
 
-### ReMail 长效邮箱 AT-Only 协议注册
+### ReMail Persistent Mailbox AT-Only Protocol Registration
 
 ```powershell
 python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --count 1 --workers 1 --registration-at-only --no-phone-reuse
 ```
 
-该模式跳过 Codex OAuth RT 和手机验证，只在 Session 已落盘且 AT 探活返回 HTTP 200 后计为成功。
+This mode skips Codex OAuth RT and phone verification. Registration is counted as successful only after the Session has been persisted and the AT liveness probe returns HTTP 200.
 
-### CFWorker 邮箱注册
+### CFWorker Email Registration
 
 ```powershell
 python chatgpt_phone_reg.py --buy-cfworker-mailbox --cfworker-domain example.com --count 1 --workers 1
 ```
 
-### 从邮箱文件注册
+### Register from an Email File
 
 ```powershell
 python chatgpt_phone_reg.py --chatai-mailbox-file hotmail.txt --count 4 --workers 4
 ```
 
-### 测试支付代理出口
+### Test Payment Proxy Egress
 
 ```powershell
 python chatgpt_phone_reg.py --test-payment-proxies --checkout-proxy-country GB --approve-proxy-country JP --update-proxy-country BR
 ```
 
-### 批量协议支付（可断点续跑）
+### Bulk Protocol Payments with Resume Support
 
 ```powershell
 python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email-file runtime\eligible.txt --workers 2 --payment-batch-id momo_vn_20260731 --payment-canary 5 --payment-retries 1
 ```
 
-### 直卡 Checkout 提链
+### Direct Card Checkout Link Extraction
 
-提取 PH/PHP 零金额 Checkout 链接：
+Extract a PH/PHP zero-amount Checkout URL:
 
 ```powershell
 python chatgpt_phone_reg.py --extract-payment-link --payment-method direct_card --email user@example.com --proxy "http://proxy"
 ```
 
-以 GoPay 单账号 Canary 执行 JIT AT、ID 矩阵、Checkout 和 Stripe init
-能力探测；不会创建支付方式或发送 Confirm/Approve：
+Run a single-account GoPay Canary that performs JIT AT, the ID matrix, Checkout, and Stripe init capability probing without creating a payment method or sending Confirm/Approve:
 
 ```powershell
 python chatgpt_phone_reg.py --extract-payment-link --payment-method gopay --email-file runtime\canary.txt --payment-probe-only --payment-canary 1 --payment-batch-id gopay_id_probe --workers 1
 ```
 
-### 注册并自动导入 SUB2API
+### Register and Automatically Import into SUB2API
 
 ```powershell
 python chatgpt_phone_reg.py --buy-remail-mailbox --count 1 --workers 1 --register-and-import --sub2api-auth-mode auto
 ```
 
-### 查看 CLI 参数
+### View CLI Arguments
 
 ```powershell
 python chatgpt_phone_reg.py --help
 ```
 
-## 测试、构建与发布
+## Testing, Building, and Releasing
 
-### 运行测试
+### Run Tests
 
 ```powershell
 python -m pytest -q
@@ -519,66 +541,78 @@ python -m compileall -q sms_tool
 .\.dotnet\dotnet.exe test .\GPTRegisterTool.slnx -c Release
 ```
 
-`global.json` 固定仓库 SDK，`Directory.Packages.props` 集中管理 NuGet 版本，标准 xUnit 工程位于 `tests/SmsWorkbench.Tests`。CI 同时执行 Python、C# 测试和规范桌面发布。
+`global.json` pins the repository SDK, while `Directory.Packages.props` centrally manages NuGet package versions. The standard xUnit project is located at `tests/SmsWorkbench.Tests`. CI runs Python tests, C# tests, and the standard desktop publishing pipeline.
 
-### 编译桌面端
+### Build the Desktop Application
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 ```
 
-标准输出目录：
+Standard output directory:
 
 ```text
 dist/net10/SmsWorkbench.exe
 ```
 
-### 构建安装器与便携包
+### Build the Installer and Portable Package
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version vYYYY.MM.DD
 ```
 
-发布文件输出到 `dist/release/`：
+Release files are written to `dist/release/`:
 
-- Windows 图形安装器。
-- 便携 ZIP 包。
-- SHA-256 校验文件。
+* Windows graphical installer.
+* Portable ZIP package.
+* SHA-256 checksum file.
 
-内部签名构建可使用：
+Internal signed builds can use:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version vYYYY.MM.DD -SelfSign
 ```
 
-### 发布检查
+### Release Checklist
 
-1. 确认 `config.json`、邮箱凭据、代理密码、API Key 和 Token 未进入 Git。
-2. 执行全量测试、示例配置解析、Python 编译检查和 `git diff --check`。
-3. 使用唯一支持的编译脚本更新 `dist/net10`。
-4. 构建安装器、便携包和校验文件，并复核校验清单中的 SHA-256。
-5. 确认待发布提交已推送，且 `git status --short` 为空；本地 `runtime/`、`sessions/` 等忽略数据不进入发布提交。
-6. 在该提交上创建版本标签并上传同一次构建生成的 Release 资产。
-7. GitHub Release 标题和正文统一使用中文；命令、文件名和错误码保持原始格式。
+1. Confirm that `config.json`, email credentials, proxy passwords, API Keys, and Tokens have not been committed to Git.
+2. Run the complete test suite, sample configuration parsing, Python compilation checks, and `git diff --check`.
+3. Update `dist/net10` using the only supported build script.
+4. Build the installer, portable package, and checksum file, then verify the SHA-256 values in the checksum manifest.
+5. Confirm that the release commit has been pushed and `git status --short` is empty. Ignored local data such as `runtime/` and `sessions/` must not be included in the release commit.
+6. Create a version tag on that commit and upload the Release assets generated by the same build.
+7. GitHub Release titles and descriptions should consistently use Chinese. Commands, filenames, and error codes should remain in their original format.
 
-当前发布使用 `vYYYY.MM.DD`；同日文档或构建修订使用 `vYYYY.MM.DD.1` 等补丁标签。安装器、便携 ZIP 和 SHA-256 文件必须来自同一次 `scripts/build_installer.ps1` 构建，并在上传前校验摘要。发布资产固定为 `GPT-Register-Tool-Setup-<version>.exe`、`GPT-Register-Tool-win-x64-<version>.zip` 和 `GPT-Register-Tool-<version>.sha256.txt`。
+Current releases use `vYYYY.MM.DD`. Documentation or build revisions made on the same day use patch tags such as `vYYYY.MM.DD.1`.
 
-## 数据与安全
+The installer, portable ZIP, and SHA-256 file must all originate from the same `scripts/build_installer.ps1` build, and their hashes must be verified before upload.
 
-- `config.json`、`sessions/`、`runtime/`、邮箱池和 Token 文件默认被 Git 忽略。
-- 示例配置不包含真实 API Key、邮箱凭据或代理密码。
-- ReMail API Key 与 Service Token 在异常和日志中会被脱敏。
-- 支付链接、BA Token、账号 AT/RT 和邮箱凭据都属于敏感数据，不应公开分享。
-- 第三方邮箱、支付、代理和接码服务的可用性及费用由对应服务商决定。
+Release asset names are fixed as:
 
-## 文档索引
+```text
+GPT-Register-Tool-Setup-<version>.exe
+GPT-Register-Tool-win-x64-<version>.zip
+GPT-Register-Tool-<version>.sha256.txt
+```
 
-- [架构说明](docs/architecture.md)
-- [目录职责](docs/directory-map.md)
-- [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.08.09.md)
-- [代理指南](PROXY_GUIDE.md)
+## Data and Security
 
-## 许可证与使用责任
+* `config.json`, `sessions/`, `runtime/`, email pools, and Token files are ignored by Git by default.
+* Example configurations do not contain real API Keys, email credentials, or proxy passwords.
+* ReMail API Keys and Service Tokens are redacted in exceptions and logs.
+* Payment links, BA Tokens, account AT/RT values, and email credentials are sensitive data and should not be shared publicly.
+* Availability and pricing for third-party email, payment, proxy, and SMS verification services are determined by their respective providers.
 
-请仅在获得授权并符合相关服务条款、地区法规及组织政策的场景中使用本项目。使用者需要自行承担第三方服务费用、账号安全和数据合规责任。
+## Documentation
+
+* [Architecture](docs/architecture.md)
+* [Directory Responsibilities](docs/directory-map.md)
+* [PayPal Zero-Due Link Guide](docs/paypal-zero-due-link.md)
+* [Latest Release Notes](docs/release-v2026.08.09.md)
+* [Proxy Guide](PROXY_GUIDE.md)
+
+## License and Usage Responsibility
+
+Use this project only in scenarios where you have proper authorization and where its use complies with applicable service terms, regional laws and regulations, and organizational policies.
+
+Users are responsible for third-party service fees, account security, and data compliance.
