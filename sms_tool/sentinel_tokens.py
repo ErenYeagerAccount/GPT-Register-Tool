@@ -12,7 +12,14 @@ from .config import CFG
 from .paths import runtime_file
 from .phone_proxy import normalize_proxy_url, redact_proxy_text as _phone_redact_proxy_text, redact_proxy_url as _phone_redact_proxy_url
 
-SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
+
+# Kept as an override for legacy integrations and tests. The default is
+# resolved lazily so importing the module does not require config.json.
+SENTINEL_CACHE_FILE = None
+
+
+def _sentinel_cache_file():
+    return SENTINEL_CACHE_FILE or runtime_file(CFG, "sentinel_cache.json")
 
 # Guards reads/writes of the shared sentinel cache file. Batch workers can reach
 # _save_sentinel_cache concurrently (e.g. a mid-flow oauth-token refresh), so
@@ -39,10 +46,11 @@ _redact_proxy_text = _phone_redact_proxy_text
 
 def _get_cached_sentinel(force_fresh=False):
     if force_fresh: return None
+    cache_file = _sentinel_cache_file()
     with _sentinel_cache_lock:
-        if SENTINEL_CACHE_FILE.exists():
+        if cache_file.exists():
             try:
-                with open(SENTINEL_CACHE_FILE) as f: cache = json.load(f)
+                with open(cache_file) as f: cache = json.load(f)
                 age = time.time() - cache.get("ts", 0)
                 ttl = int((CFG.get("timeouts") or {}).get("token_cache_ttl", 600) or 600)
                 if age < ttl and cache.get("sentinel_token"):
@@ -55,11 +63,12 @@ def _get_cached_sentinel(force_fresh=False):
 def _save_sentinel_cache(data):
     payload = dict(data or {})
     payload["ts"] = time.time()
+    cache_file = _sentinel_cache_file()
     with _sentinel_cache_lock:
-        tmp_path = SENTINEL_CACHE_FILE.with_name(f"{SENTINEL_CACHE_FILE.name}.{uuid.uuid4().hex}.tmp")
+        tmp_path = cache_file.with_name(f"{cache_file.name}.{uuid.uuid4().hex}.tmp")
         with open(tmp_path, "w") as f:
             json.dump(payload, f, ensure_ascii=False)
-        tmp_path.replace(SENTINEL_CACHE_FILE)
+        tmp_path.replace(cache_file)
     print(f"[*] Sentinel token cached")
 
 
@@ -487,7 +496,9 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
 
 # Fresh account registrations may extract Sentinel data concurrently, but the
 # gate remains deliberately small to avoid overwhelming sentinel.openai.com.
-_sentinel_extraction_gate = threading.BoundedSemaphore(_sentinel_max_concurrency())
+# Use the documented default until an application runtime config is active.
+# Reading CFG here would make importing the CLI require config.json.
+_sentinel_extraction_gate = threading.BoundedSemaphore(2)
 _sentinel_cache_fill_lock = threading.Lock()
 
 
