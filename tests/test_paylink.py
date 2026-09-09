@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+from paylink.cli import main
+from paylink.extract import ExtractSettings, extract_upi_link
+from paylink.http import HttpResponse, account_cookie_header, normalize_proxy, pin_proxy_region
+from paylink.parse import extract_upi_fields, extract_upi_from_html
+from paylink.session import access_token_from_payload, access_token_from_path, credentials_from_payload
+
+
+class FakeTransport:
+    def __init__(self, *, checkout=None, init=None, confirm=None, approve=None, page=None, html=""):
+        self.checkout = checkout or {
+            "checkout_session_id": "cs_test_123",
+            "publishable_key": "pk_live_test",
+            "processor_entity": "openai_ie",
+        }
+        self.init = init or {
+            "total_summary": {"due": 0},
+            "elements_options": {"payment_method_types": ["upi"]},
+            "stripe_hosted_url": "https://pay.openai.com/c/pay/cs_test_123",
+        }
+        self.confirm = {} if confirm is None else confirm
+        self.approve = {"result": "approved"} if approve is None else approve
+        self.page = {"next_action": {"upi_display_qr_code": {"upi_uri": "upi://pay?pa=openai@upi&am=0"}}} if page is None else page
+        self.html = html
+        self.chatgpt_calls: list[str] = []
+        self.stripe_posts: list[str] = []
+
+    def chatgpt_get(self, path, token, proxy, timeout, cookie="", account_id=""):
+        return HttpResponse(200, payload={"accessToken": token} if token else {})
+
+    def chatgpt_post(self, path, body, token, proxy, timeout, cookie="", account_id=""):
+        self.chatgpt_calls.append(path)
+        if path.endswith("/checkout"):
+            return HttpResponse(200, payload=self.checkout)
+        if path.endswith("/confirm"):
+            return HttpResponse(400, payload={})
+        return HttpResponse(200, payload=self.approve)
+
+    def stripe_post(self, url, data, proxy, timeout):
+        self.stripe_posts.append(url)
+        if url.endswith("/init"):
+            return HttpResponse(200, payload=self.init)
+        if url.endswith("/confirm"):
+            return HttpResponse(200, payload=self.confirm)
+        return HttpResponse(200, payload=self.init)
+
+    def stripe_get(self, url, params, proxy, timeout):
+        return HttpResponse(200, payload=self.page)
+
+    def fetch_text(self, url, proxy, timeout):
+        return HttpResponse(200, self.html)
+
+
+def test_normalize_proxy_adds_scheme():
+    assert normalize_proxy("127.0.0.1:7897") == "http://127.0.0.1:7897"
+    assert (
+        normalize_proxy("us2.cliproxy.io:3010:user-region-IN-sid-abc-t-30:secret")
+        == "http://user-region-IN-sid-abc-t-30:secret@us2.cliproxy.io:3010"
+    )
+
+
+def test_pin_proxy_region_rewrites_cliproxy_username():
+    pinned = pin_proxy_region(
+        "us2.cliproxy.io:3010:user-region-IN-sid-abc-t-30:secret",
+        "JP",
+    )
+    assert "region-JP" in pinned
+    assert "region-IN" not in pinned
+    assert pinned.startswith("http://user-region-JP-")
+
+
+def test_credentials_from_chatgpt_session_dump():
+    creds = credentials_from_payload({
+        "accessToken": "tok-at",
+        "sessionToken": "tok-st",
+        "account": {"id": "acct-1"},
+    })
+    assert creds["access_token"] == "tok-at"
+    assert creds["session_token"] == "tok-st"
+    assert creds["account_id"] == "acct-1"
+    assert creds["cookie_header"] == "tok-st"
+
+
+def test_credentials_keep_tool_cookie_header():
+    creds = credentials_from_payload({
+        "access_token": "tok-at",
+        "cookie_header": "__Secure-next-auth.session-token=st; __cf_bm=burn; oai-did=old",
+    })
+    assert creds["session_token"] == "st"
+    assert "__cf_bm" in creds["cookie_header"]
+
+
+def test_account_cookie_header_resets_cf_and_did():
+    header = account_cookie_header(
+        "__Secure-next-auth.session-token=st; __cf_bm=burn; oai-did=old-did",
+        device_id="new-did",
+    )
+    assert "session-token=st" in header
+    assert "__cf_bm" not in header
+    assert "oai-did=new-did" in header
+    assert "old-did" not in header
+
+
+def test_nested_auth_session_access_token():
+    payload = {"auth_session": {"session": {"accessToken": "tok-nested"}}}
+    assert access_token_from_payload(payload) == "tok-nested"
+
+
+def test_access_token_from_path(tmp_path: Path):
+    path = tmp_path / "session.json"
+    path.write_text(json.dumps({"access_token": "tok-file"}), encoding="utf-8")
+    assert access_token_from_path(path) == "tok-file"
+
+
+def test_fast_mode_returns_zero_due_stripe_url_without_upi_poll():
+    transport = FakeTransport()
+    result = extract_upi_link(
+        "tok",
+        settings=ExtractSettings(mode="fast"),
+        transport=transport,
+        sleep=lambda _seconds: None,
+    )
+    assert result.ok
+    assert result.link_type == "stripe_zero_due"
+    assert result.amount == 0
+    assert "pay.openai.com" in result.url
+    assert all("/confirm" not in path for path in transport.chatgpt_calls)
+
+
+def test_upi_mode_extracts_deep_link():
+    result = extract_upi_link(
+        "tok",
+        settings=ExtractSettings(mode="upi", poll_interval_seconds=0, approve_attempts=1, poll_attempts=1),
+        transport=FakeTransport(),
+        sleep=lambda _seconds: None,
+    )
+    assert result.ok
+    assert result.link_type == "upi_deep_link"
+    assert result.url.startswith("upi://")
+
+
+def test_unauthorized_includes_chatgpt_message():
+    transport = FakeTransport()
+    transport.chatgpt_post = lambda *args, **kwargs: HttpResponse(
+        401,
+        payload={"error": {"message": "Could not parse your authentication token", "code": "unauthorized_unknown"}},
+    )
+    result = extract_upi_link("tok", transport=transport, sleep=lambda _seconds: None)
+    assert not result.ok
+    assert result.error_code == "checkout_unauthorized"
+    assert "parse" in result.error.lower()
+
+
+def test_rejects_nonzero_due():
+    transport = FakeTransport(
+        init={
+            "total_summary": {"due": 19900},
+            "elements_options": {"payment_method_types": ["upi"]},
+        }
+    )
+    result = extract_upi_link(
+        "tok",
+        settings=ExtractSettings(require_zero_due=True, poll_interval_seconds=0),
+        transport=transport,
+        sleep=lambda _seconds: None,
+    )
+    assert not result.ok
+    assert result.error_code == "no_free_trial"
+
+
+def test_upi_hosted_fallback_when_uri_missing():
+    transport = FakeTransport(page={}, confirm={})
+    result = extract_upi_link(
+        "tok",
+        settings=ExtractSettings(mode="upi", poll_interval_seconds=0, approve_attempts=1, poll_attempts=1),
+        transport=transport,
+        sleep=lambda _seconds: None,
+    )
+    assert result.ok
+    assert result.link_type == "stripe_zero_due"
+    assert "pay.openai.com" in result.url
+
+
+def test_html_hydration_recovers_upi_uri():
+    fields = extract_upi_from_html('<script>{"upi_uri":"upi://pay?pa=merchant@upi"}</script>')
+    assert fields["upi_uri"].startswith("upi://")
+    assert extract_upi_fields({"next_action": {"hosted_instructions_url": "https://payments.stripe.com/upi/instructions/abc"}})
+
+
+def test_cli_fast_json(tmp_path: Path, capsys):
+    session = tmp_path / "session.json"
+    session.write_text(json.dumps({"access_token": "tok"}), encoding="utf-8")
+    transport = FakeTransport()
+    with patch("paylink.service.extract_upi_link", lambda token, settings: extract_upi_link(token, settings=settings, transport=transport, sleep=lambda _seconds: None)):
+        code = main(["--session", str(session), "--proxy", "127.0.0.1:7897"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert code == 0
+    assert payload["ok"] is True
+    assert payload["link_type"] == "stripe_zero_due"
+
+
+def test_inspect_and_proxy_preview():
+    from paylink.service import inspect_job, job_from_session, preview_proxy
+    from paylink.web import _jobs_from_body
+
+    job = job_from_session(
+        {"accessToken": "tok-at", "sessionToken": "tok-st", "account": {"id": "acct-1"}},
+        "session-1",
+    )
+    info = inspect_job(job)
+    assert info["ok"] is True
+    assert info["has_session_cookie"] is True
+    preview = preview_proxy("us2.cliproxy.io:3010:user-region-IN-sid-abc-t-30:secret", "JP")
+    assert "***" in preview["normalized"]
+    assert "region-JP" in preview["checkout_pinned"]
+    jobs = _jobs_from_body({
+        "sessions": '{"sessionToken":"aaa"}\n{"sessionToken":"bbb"}',
+        "token": "",
+    })
+    assert len(jobs) == 2

@@ -117,6 +117,32 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 Environment variables take precedence over `config.json`. API Keys saved through the desktop Settings page are written only to the local, Git-ignored `config.json`.
 
+### Payment-link CLI (0₹ Stripe, no registration)
+
+`paylink` only creates a checkout link from an existing ChatGPT session. Paste a `/api/auth/session` JSON file (`sessionToken` is required; an `accessToken` alone is rejected by ChatGPT). Default mode is fast: Japan checkout + Stripe init, then return the hosted `pay.openai.com` URL when due is **0**. Add `--upi` only if you also need a `upi://` deep link.
+
+```powershell
+python -m paylink --session .\session.json --proxy "http://HOST:PORT"
+python -m paylink --session .\session.json --proxy "us2.cliproxy.io:3010:USER:PASS" --checkout-country JP
+python -m paylink --session .\session.json --proxy "http://HOST:PORT" --upi
+python -m paylink --sessions-dir .\sessions --proxy "http://HOST:PORT" --workers 4
+```
+
+Cliproxy `host:port:user:pass` lines are converted to a normal proxy URL. If the username contains `region-XX`, checkout rewrites it to `--checkout-country` (JP by default). Use a long sticky session (`-t-30`), not `-t-1`.
+
+ChatGPT calls use the same request-based curl_cffi path as `gen_pp_link` (no cookie jar). Each link resets cookies and sends only NextAuth essentials plus a fresh `oai-did`. A ChatGPT `unusual_activity` response is OpenAI's risk check; the tool cannot override it. Wait and retry from a residential JP exit on your machine — do not hammer checkout.
+
+A dead token fails immediately with `checkout_unauthorized`. Non-zero due fails with `no_free_trial`.
+
+### Local web console (GPT UPI CHECKOUT BY LEVALZ)
+
+```powershell
+python -m paylink --web
+python -m paylink.web --port 8765
+```
+
+Open `http://127.0.0.1:8765/`. The console is bound to localhost. Paste `/api/auth/session` JSON (or load `.json` files), set the Cliproxy line, choose Fast or UPI, then extract. Inspect Session and Preview Proxy do not call ChatGPT checkout. Sessions are not written to disk.
+
 ## Key Features
 
 ### One-Click Registration

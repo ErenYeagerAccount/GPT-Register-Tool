@@ -4,7 +4,7 @@ The test suite is offline by default. Run it with:
 
 ```powershell
 python -m pytest -q
-python -m compileall -q sms_tool services/protocol-payment
+python -m compileall -q sms_tool services/protocol-payment paylink
 dotnet test GPTRegisterTool.slnx -c Release --nologo
 ```
 
@@ -13,6 +13,7 @@ payment requests are never part of the default suite.
 
 ## Files
 
+- `test_paylink.py` covers the standalone UPI payment-link extractor (token/session input, capability gates, and offline transport).
 - `test_entrypoints.py` verifies process entrypoints and lazy optional command seams.
 - `test_cli_one_click_sms.py` covers selected-mailbox CLI seams and one-click SMS command assumptions.
 - `test_account_scan.py` covers account scan classification and phone-probe semantics.
