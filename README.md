@@ -119,13 +119,18 @@ Environment variables take precedence over `config.json`. API Keys saved through
 
 ### Payment-link CLI (0₹ Stripe, no registration)
 
-`paylink` only creates a checkout link from an existing ChatGPT access token. Default mode is fast: Japan checkout + Stripe init, then return the hosted `pay.openai.com` URL when due is **0**. Add `--upi` only if you also need a `upi://` deep link.
+`paylink` only creates a checkout link from an existing ChatGPT session. Paste a `/api/auth/session` JSON file (`sessionToken` is required; an `accessToken` alone is rejected by ChatGPT). Default mode is fast: Japan checkout + Stripe init, then return the hosted `pay.openai.com` URL when due is **0**. Add `--upi` only if you also need a `upi://` deep link.
 
 ```powershell
-python -m paylink --token "ACCESS_TOKEN" --proxy "http://HOST:PORT"
-python -m paylink --token "ACCESS_TOKEN" --proxy "http://HOST:PORT" --upi
+python -m paylink --session .\session.json --proxy "http://HOST:PORT"
+python -m paylink --session .\session.json --proxy "us2.cliproxy.io:3010:USER:PASS" --checkout-country JP
+python -m paylink --session .\session.json --proxy "http://HOST:PORT" --upi
 python -m paylink --sessions-dir .\sessions --proxy "http://HOST:PORT" --workers 4
 ```
+
+Cliproxy `host:port:user:pass` lines are converted to a normal proxy URL. If the username contains `region-XX`, checkout rewrites it to `--checkout-country` (JP by default). Use a long sticky session (`-t-30`), not `-t-1`.
+
+The client warms up `chatgpt.com` on one curl session (device id, locale, matching Chrome TLS/UA) before checkout. A ChatGPT `unusual_activity` response is OpenAI's risk check; the tool cannot override it. Wait and retry from a residential JP exit on your machine — do not hammer checkout.
 
 A dead token fails immediately with `checkout_unauthorized`. Non-zero due fails with `no_free_trial`.
 

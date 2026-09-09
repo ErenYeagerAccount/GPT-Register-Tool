@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Any
 
-from .http import CurlTransport, Transport, normalize_proxy
+from .http import CurlTransport, Transport, normalize_proxy, pin_proxy_region
 from .models import PaylinkResult
 from .parse import (
     amount_minor,
@@ -49,7 +49,7 @@ class ExtractSettings:
         require_zero_due: bool = True,
         checkout_ui_mode: str = "custom",
         mode: str = "fast",
-        chatgpt_timeout: int = 12,
+        chatgpt_timeout: int = 20,
         stripe_timeout: int = 10,
         approve_attempts: int = 1,
         poll_attempts: int = 3,
@@ -58,13 +58,14 @@ class ExtractSettings:
         cookie: str = "",
         account_id: str = "",
     ) -> None:
-        checkout_proxy = normalize_proxy(checkout_proxy)
+        checkout_country = (checkout_country or "JP").upper()
+        checkout_proxy = pin_proxy_region(normalize_proxy(checkout_proxy), checkout_country)
         provider_proxy = normalize_proxy(provider_proxy) or checkout_proxy
         approve_proxy = normalize_proxy(approve_proxy) or provider_proxy
         self.checkout_proxy = checkout_proxy
         self.provider_proxy = provider_proxy
         self.approve_proxy = approve_proxy
-        self.checkout_country = (checkout_country or "JP").upper()
+        self.checkout_country = checkout_country
         self.payment_country = (payment_country or "IN").upper()
         self.require_zero_due = bool(require_zero_due)
         self.checkout_ui_mode = checkout_ui_mode if checkout_ui_mode in {"custom", "hosted"} else "hosted"
@@ -95,6 +96,14 @@ def extract_upi_link(
             error_stage="auth",
         )
     client = transport or CurlTransport()
+    if hasattr(client, "prepare"):
+        client.prepare(
+            cfg.checkout_proxy,
+            cfg.chatgpt_timeout,
+            cookie=cfg.cookie,
+            country=cfg.checkout_country,
+            account_id=cfg.account_id,
+        )
     if cfg.cookie and hasattr(client, "chatgpt_get"):
         session = client.chatgpt_get(
             "/api/auth/session",
@@ -118,6 +127,22 @@ def extract_upi_link(
                 error_code="checkout_unauthorized",
                 error_stage="auth",
             )
+    if token and hasattr(client, "chatgpt_get"):
+        me = client.chatgpt_get(
+            "/backend-api/me",
+            token,
+            cfg.checkout_proxy,
+            cfg.chatgpt_timeout,
+            cookie=cfg.cookie,
+            account_id=cfg.account_id,
+        )
+        if me.status_code in {401, 403}:
+            return PaylinkResult.failure(
+                error=_error_detail(me) or "access token invalid or expired",
+                error_code="checkout_unauthorized",
+                error_stage="auth",
+                retryable=False,
+            )
     return _run(token, cfg, client, sleep)
 
 
@@ -126,28 +151,33 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
     currency = CURRENCY.get(checkout_country, "JPY")
     stripe_js_id = str(uuid.uuid4())
 
-    checkout = None
-    for attempt in range(2):
+    checkout_body = {
+        "entry_point": "all_plans_pricing_modal",
+        "plan_name": "chatgptplusplan",
+        "billing_details": {"country": checkout_country, "currency": currency},
+        "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
+        "checkout_ui_mode": cfg.checkout_ui_mode,
+    }
+    checkout = client.chatgpt_post(
+        CHECKOUT_PATH,
+        checkout_body,
+        token,
+        cfg.checkout_proxy,
+        cfg.chatgpt_timeout,
+        cookie=cfg.cookie,
+        account_id=cfg.account_id,
+    )
+    if checkout.status_code == 599:
+        sleep(0.2)
         checkout = client.chatgpt_post(
             CHECKOUT_PATH,
-            {
-                "entry_point": "all_plans_pricing_modal",
-                "plan_name": "chatgptplusplan",
-                "billing_details": {"country": checkout_country, "currency": currency},
-                "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
-                "checkout_ui_mode": cfg.checkout_ui_mode,
-            },
+            checkout_body,
             token,
             cfg.checkout_proxy,
             cfg.chatgpt_timeout,
             cookie=cfg.cookie,
             account_id=cfg.account_id,
         )
-        if checkout.status_code < 500 and checkout.status_code != 599:
-            break
-        if attempt == 0:
-            sleep(0.2)
-    assert checkout is not None
     if checkout.status_code == 401:
         detail = _error_detail(checkout)
         return PaylinkResult.failure(
@@ -163,7 +193,7 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
             error=detail or f"checkout failed: {checkout.status_code}",
             error_code="unusual_activity" if unusual else "checkout_failed",
             error_stage="checkout",
-            retryable=unusual or checkout.status_code >= 500,
+            retryable=False if unusual else checkout.status_code >= 500,
         )
     checkout_data = _json(checkout)
     cs_id = str(checkout_data.get("checkout_session_id") or checkout_data.get("id") or "")
@@ -186,8 +216,8 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
     )
 
     init_body = {
-        "browser_locale": "en-IN" if cfg.mode == "upi" else "en-US",
-        "browser_timezone": "Asia/Kolkata" if cfg.mode == "upi" else "Asia/Tokyo",
+        "browser_locale": "en-IN" if cfg.mode == "upi" else ("ja-JP" if checkout_country == "JP" else "en-US"),
+        "browser_timezone": "Asia/Kolkata" if cfg.mode == "upi" else ("Asia/Tokyo" if checkout_country == "JP" else "UTC"),
         "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
         "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
         "elements_session_client[elements_init_source]": "custom_checkout",

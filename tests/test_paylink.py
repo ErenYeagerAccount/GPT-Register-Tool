@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from paylink.cli import main
 from paylink.extract import ExtractSettings, extract_upi_link
-from paylink.http import HttpResponse, normalize_proxy
+from paylink.http import HttpResponse, normalize_proxy, pin_proxy_region
 from paylink.parse import extract_upi_fields, extract_upi_from_html
 from paylink.session import access_token_from_payload, access_token_from_path, credentials_from_payload
 
@@ -58,6 +58,20 @@ class FakeTransport:
 
 def test_normalize_proxy_adds_scheme():
     assert normalize_proxy("127.0.0.1:7897") == "http://127.0.0.1:7897"
+    assert (
+        normalize_proxy("us2.cliproxy.io:3010:user-region-IN-sid-abc-t-30:secret")
+        == "http://user-region-IN-sid-abc-t-30:secret@us2.cliproxy.io:3010"
+    )
+
+
+def test_pin_proxy_region_rewrites_cliproxy_username():
+    pinned = pin_proxy_region(
+        "us2.cliproxy.io:3010:user-region-IN-sid-abc-t-30:secret",
+        "JP",
+    )
+    assert "region-JP" in pinned
+    assert "region-IN" not in pinned
+    assert pinned.startswith("http://user-region-JP-")
 
 
 def test_credentials_from_chatgpt_session_dump():
