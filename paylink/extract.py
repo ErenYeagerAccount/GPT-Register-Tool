@@ -47,7 +47,7 @@ class ExtractSettings:
         checkout_country: str = "JP",
         payment_country: str = "IN",
         require_zero_due: bool = True,
-        checkout_ui_mode: str = "hosted",
+        checkout_ui_mode: str = "custom",
         mode: str = "fast",
         chatgpt_timeout: int = 12,
         stripe_timeout: int = 10,
@@ -55,6 +55,8 @@ class ExtractSettings:
         poll_attempts: int = 3,
         poll_interval_seconds: float = 0.2,
         allow_hosted_fallback: bool = True,
+        cookie: str = "",
+        account_id: str = "",
     ) -> None:
         checkout_proxy = normalize_proxy(checkout_proxy)
         provider_proxy = normalize_proxy(provider_proxy) or checkout_proxy
@@ -73,6 +75,8 @@ class ExtractSettings:
         self.poll_attempts = max(1, min(int(poll_attempts), 8))
         self.poll_interval_seconds = max(0.0, min(float(poll_interval_seconds), 2.0))
         self.allow_hosted_fallback = bool(allow_hosted_fallback)
+        self.cookie = str(cookie or "").strip()
+        self.account_id = str(account_id or "").strip()
 
 
 def extract_upi_link(
@@ -83,14 +87,37 @@ def extract_upi_link(
     sleep: Any = time.sleep,
 ) -> PaylinkResult:
     token = str(access_token or "").strip()
-    if not token:
+    cfg = settings or ExtractSettings()
+    if not token and not cfg.cookie:
         return PaylinkResult.failure(
             error="missing access token",
             error_code="missing_access_token",
             error_stage="auth",
         )
-    cfg = settings or ExtractSettings()
     client = transport or CurlTransport()
+    if cfg.cookie and hasattr(client, "chatgpt_get"):
+        session = client.chatgpt_get(
+            "/api/auth/session",
+            token,
+            cfg.checkout_proxy,
+            cfg.chatgpt_timeout,
+            cookie=cfg.cookie,
+            account_id=cfg.account_id,
+        )
+        if session.status_code == 200:
+            payload = _json(session)
+            fresh = str(payload.get("accessToken") or payload.get("access_token") or "").strip()
+            if fresh:
+                token = fresh
+            account = payload.get("account") if isinstance(payload.get("account"), dict) else {}
+            if not cfg.account_id:
+                cfg.account_id = str(account.get("id") or "").strip()
+        elif session.status_code in {401, 403} and not token:
+            return PaylinkResult.failure(
+                error=_error_detail(session) or "session cookie rejected",
+                error_code="checkout_unauthorized",
+                error_stage="auth",
+            )
     return _run(token, cfg, client, sleep)
 
 
@@ -113,6 +140,8 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
             token,
             cfg.checkout_proxy,
             cfg.chatgpt_timeout,
+            cookie=cfg.cookie,
+            account_id=cfg.account_id,
         )
         if checkout.status_code < 500 and checkout.status_code != 599:
             break
@@ -129,11 +158,12 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
         )
     if checkout.status_code >= 400:
         detail = _error_detail(checkout)
+        unusual = "unusual activity" in detail.lower()
         return PaylinkResult.failure(
             error=detail or f"checkout failed: {checkout.status_code}",
-            error_code="checkout_failed",
+            error_code="unusual_activity" if unusual else "checkout_failed",
             error_stage="checkout",
-            retryable=checkout.status_code >= 500,
+            retryable=unusual or checkout.status_code >= 500,
         )
     checkout_data = _json(checkout)
     cs_id = str(checkout_data.get("checkout_session_id") or checkout_data.get("id") or "")
@@ -304,6 +334,8 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
             token,
             cfg.approve_proxy,
             cfg.chatgpt_timeout,
+            cookie=cfg.cookie,
+            account_id=cfg.account_id,
         )
         approval_data = _json(chatgpt_confirm) if chatgpt_confirm.status_code < 400 else {}
         _merge(qr_data, extract_upi_fields(approval_data))
@@ -316,6 +348,8 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
                     token,
                     cfg.approve_proxy,
                     cfg.chatgpt_timeout,
+                    cookie=cfg.cookie,
+                    account_id=cfg.account_id,
                 )
                 if approve_resp.status_code < 400:
                     approval_data = _json(approve_resp)

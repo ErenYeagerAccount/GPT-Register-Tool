@@ -26,7 +26,25 @@ class HttpResponse:
 
 
 class Transport(Protocol):
-    def chatgpt_post(self, path: str, body: dict[str, Any], token: str, proxy: str, timeout: int) -> HttpResponse: ...
+    def chatgpt_post(
+        self,
+        path: str,
+        body: dict[str, Any],
+        token: str,
+        proxy: str,
+        timeout: int,
+        cookie: str = "",
+        account_id: str = "",
+    ) -> HttpResponse: ...
+    def chatgpt_get(
+        self,
+        path: str,
+        token: str,
+        proxy: str,
+        timeout: int,
+        cookie: str = "",
+        account_id: str = "",
+    ) -> HttpResponse: ...
     def stripe_post(self, url: str, data: dict[str, str], proxy: str, timeout: int) -> HttpResponse: ...
     def stripe_get(self, url: str, params: dict[str, str], proxy: str, timeout: int) -> HttpResponse: ...
     def fetch_text(self, url: str, proxy: str, timeout: int) -> HttpResponse: ...
@@ -64,16 +82,33 @@ class CurlTransport:
         self._stripe.headers["User-Agent"] = USER_AGENT
         self._stripe_proxy = ""
 
-    def chatgpt_post(self, path: str, body: dict[str, Any], token: str, proxy: str, timeout: int) -> HttpResponse:
+    def chatgpt_post(
+        self,
+        path: str,
+        body: dict[str, Any],
+        token: str,
+        proxy: str,
+        timeout: int,
+        cookie: str = "",
+        account_id: str = "",
+    ) -> HttpResponse:
         url = urljoin(CHATGPT_ORIGIN + "/", path.lstrip("/"))
         headers = {
-            "Authorization": f"Bearer {token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
             "Origin": CHATGPT_ORIGIN,
             "Referer": "https://chatgpt.com/",
             "User-Agent": USER_AGENT,
         }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if account_id:
+            headers["Chatgpt-Account-Id"] = account_id
+        cookie_header = str(cookie or "").strip()
+        if cookie_header and "session-token" not in cookie_header.lower() and cookie_header.startswith("eyJ"):
+            cookie_header = f"__Secure-next-auth.session-token={cookie_header}"
+        if cookie_header:
+            headers["Cookie"] = cookie_header
         kwargs: dict[str, Any] = {"headers": headers, "json": body, "timeout": timeout}
         proxies = _proxy_map(proxy)
         try:
@@ -88,6 +123,49 @@ class CurlTransport:
                 if proxies:
                     kwargs["proxies"] = proxies
                 response = self._requests.post(url, **kwargs)
+        except Exception as exc:
+            return HttpResponse(599, str(exc))
+        return HttpResponse(response.status_code, response.text)
+
+    def chatgpt_get(
+        self,
+        path: str,
+        token: str,
+        proxy: str,
+        timeout: int,
+        cookie: str = "",
+        account_id: str = "",
+    ) -> HttpResponse:
+        url = urljoin(CHATGPT_ORIGIN + "/", path.lstrip("/"))
+        headers = {
+            "Accept": "application/json",
+            "Origin": CHATGPT_ORIGIN,
+            "Referer": "https://chatgpt.com/",
+            "User-Agent": USER_AGENT,
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if account_id:
+            headers["Chatgpt-Account-Id"] = account_id
+        cookie_header = str(cookie or "").strip()
+        if cookie_header and "session-token" not in cookie_header.lower() and cookie_header.startswith("eyJ"):
+            cookie_header = f"__Secure-next-auth.session-token={cookie_header}"
+        if cookie_header:
+            headers["Cookie"] = cookie_header
+        kwargs: dict[str, Any] = {"headers": headers, "timeout": timeout}
+        proxies = _proxy_map(proxy)
+        try:
+            if self._curl is not None:
+                if proxies:
+                    kwargs["proxies"] = proxies
+                try:
+                    response = self._curl.get(url, impersonate="chrome124", **kwargs)
+                except Exception:
+                    response = self._curl.get(url, impersonate="chrome", **kwargs)
+            else:
+                if proxies:
+                    kwargs["proxies"] = proxies
+                response = self._requests.get(url, **kwargs)
         except Exception as exc:
             return HttpResponse(599, str(exc))
         return HttpResponse(response.status_code, response.text)

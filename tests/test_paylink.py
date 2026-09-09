@@ -8,7 +8,7 @@ from paylink.cli import main
 from paylink.extract import ExtractSettings, extract_upi_link
 from paylink.http import HttpResponse, normalize_proxy
 from paylink.parse import extract_upi_fields, extract_upi_from_html
-from paylink.session import access_token_from_payload, access_token_from_path
+from paylink.session import access_token_from_payload, access_token_from_path, credentials_from_payload
 
 
 class FakeTransport:
@@ -30,7 +30,10 @@ class FakeTransport:
         self.chatgpt_calls: list[str] = []
         self.stripe_posts: list[str] = []
 
-    def chatgpt_post(self, path, body, token, proxy, timeout):
+    def chatgpt_get(self, path, token, proxy, timeout, cookie="", account_id=""):
+        return HttpResponse(200, payload={"accessToken": token} if token else {})
+
+    def chatgpt_post(self, path, body, token, proxy, timeout, cookie="", account_id=""):
         self.chatgpt_calls.append(path)
         if path.endswith("/checkout"):
             return HttpResponse(200, payload=self.checkout)
@@ -57,7 +60,15 @@ def test_normalize_proxy_adds_scheme():
     assert normalize_proxy("127.0.0.1:7897") == "http://127.0.0.1:7897"
 
 
-def test_access_token_from_nested_session():
+def test_credentials_from_chatgpt_session_dump():
+    creds = credentials_from_payload({
+        "accessToken": "tok-at",
+        "sessionToken": "tok-st",
+        "account": {"id": "acct-1"},
+    })
+    assert creds["access_token"] == "tok-at"
+    assert creds["session_token"] == "tok-st"
+    assert creds["account_id"] == "acct-1"
     payload = {"auth_session": {"session": {"accessToken": "tok-nested"}}}
     assert access_token_from_payload(payload) == "tok-nested"
 

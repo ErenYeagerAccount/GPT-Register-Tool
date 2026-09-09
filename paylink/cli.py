@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .extract import ExtractSettings, extract_upi_link
-from .session import access_token_from_path
+from .session import credentials_from_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,12 +61,24 @@ def _jobs(args) -> list[dict[str, str]]:
     if args.token:
         jobs.append({"source": "token", "token": args.token})
     if args.session:
-        jobs.append({"source": str(args.session), "token": access_token_from_path(args.session)})
+        creds = credentials_from_path(args.session)
+        jobs.append({
+            "source": str(args.session),
+            "token": creds["access_token"],
+            "cookie": creds["session_token"],
+            "account_id": creds["account_id"],
+        })
     if args.sessions_dir:
         folder = Path(args.sessions_dir)
         for path in sorted(folder.glob("*.json")):
             try:
-                jobs.append({"source": str(path), "token": access_token_from_path(path)})
+                creds = credentials_from_path(path)
+                jobs.append({
+                    "source": str(path),
+                    "token": creds["access_token"],
+                    "cookie": creds["session_token"],
+                    "account_id": creds["account_id"],
+                })
             except (OSError, ValueError, json.JSONDecodeError):
                 jobs.append({"source": str(path), "token": "", "error": "invalid_session"})
     return jobs
@@ -74,9 +86,20 @@ def _jobs(args) -> list[dict[str, str]]:
 
 def _run_job(job: dict[str, str], settings: ExtractSettings) -> dict:
     source = job.get("source") or ""
-    if job.get("error") or not job.get("token"):
+    if job.get("error") or not (job.get("token") or job.get("cookie")):
         return {"ok": False, "source": source, "error_code": job.get("error") or "missing_access_token"}
-    result = extract_upi_link(job["token"], settings=settings).to_dict()
+    job_settings = ExtractSettings(
+        checkout_proxy=settings.checkout_proxy,
+        provider_proxy=settings.provider_proxy,
+        approve_proxy=settings.approve_proxy,
+        checkout_country=settings.checkout_country,
+        require_zero_due=settings.require_zero_due,
+        allow_hosted_fallback=settings.allow_hosted_fallback,
+        mode=settings.mode,
+        cookie=job.get("cookie") or settings.cookie,
+        account_id=job.get("account_id") or settings.account_id,
+    )
+    result = extract_upi_link(job.get("token") or "", settings=job_settings).to_dict()
     result["source"] = source
     return result
 
