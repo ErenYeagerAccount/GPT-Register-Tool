@@ -81,7 +81,7 @@ class CurlTransport:
                 if proxies:
                     kwargs["proxies"] = proxies
                 try:
-                    response = self._curl.post(url, impersonate=IMPERSONATE, **kwargs)
+                    response = self._curl.post(url, impersonate="chrome124", **kwargs)
                 except Exception:
                     response = self._curl.post(url, impersonate="chrome", **kwargs)
             else:

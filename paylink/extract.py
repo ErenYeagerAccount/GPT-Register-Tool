@@ -120,15 +120,17 @@ def _run(token: str, cfg: ExtractSettings, client: Transport, sleep) -> PaylinkR
             sleep(0.2)
     assert checkout is not None
     if checkout.status_code == 401:
+        detail = _error_detail(checkout)
         return PaylinkResult.failure(
-            error="access token invalid or expired",
+            error=detail or "access token invalid or expired",
             error_code="checkout_unauthorized",
             error_stage="checkout",
             retryable=False,
         )
     if checkout.status_code >= 400:
+        detail = _error_detail(checkout)
         return PaylinkResult.failure(
-            error=f"checkout failed: {checkout.status_code}",
+            error=detail or f"checkout failed: {checkout.status_code}",
             error_code="checkout_failed",
             error_stage="checkout",
             retryable=checkout.status_code >= 500,
@@ -384,6 +386,21 @@ def _json(response) -> dict[str, Any]:
     except Exception:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _error_detail(response) -> str:
+    payload = _json(response)
+    err = payload.get("error")
+    if isinstance(err, dict):
+        message = str(err.get("message") or err.get("code") or "").strip()
+        code = str(err.get("code") or "").strip()
+        if message and code and code not in message:
+            return f"{code}: {message}"
+        return message or code
+    text = str(getattr(response, "text", "") or "").strip().replace("\n", " ")
+    if text.startswith("<"):
+        return f"checkout failed: {response.status_code} (html)"
+    return text[:240] or f"checkout failed: {getattr(response, 'status_code', '')}"
 
 
 def _merge(target: dict[str, Any], extra: dict[str, Any]) -> None:

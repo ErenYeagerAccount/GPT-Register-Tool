@@ -95,12 +95,16 @@ def test_upi_mode_extracts_deep_link():
     assert result.url.startswith("upi://")
 
 
-def test_rejects_expired_token():
+def test_unauthorized_includes_chatgpt_message():
     transport = FakeTransport()
-    transport.chatgpt_post = lambda *args, **kwargs: HttpResponse(401, "unauthorized")
+    transport.chatgpt_post = lambda *args, **kwargs: HttpResponse(
+        401,
+        payload={"error": {"message": "Could not parse your authentication token", "code": "unauthorized_unknown"}},
+    )
     result = extract_upi_link("tok", transport=transport, sleep=lambda _seconds: None)
     assert not result.ok
     assert result.error_code == "checkout_unauthorized"
+    assert "parse" in result.error.lower()
 
 
 def test_rejects_nonzero_due():
