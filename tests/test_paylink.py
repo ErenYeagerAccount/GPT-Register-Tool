@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from paylink.cli import main
 from paylink.extract import ExtractSettings, extract_upi_link
-from paylink.http import HttpResponse, normalize_proxy, pin_proxy_region
+from paylink.http import HttpResponse, account_cookie_header, normalize_proxy, pin_proxy_region
 from paylink.parse import extract_upi_fields, extract_upi_from_html
 from paylink.session import access_token_from_payload, access_token_from_path, credentials_from_payload
 
@@ -83,6 +83,30 @@ def test_credentials_from_chatgpt_session_dump():
     assert creds["access_token"] == "tok-at"
     assert creds["session_token"] == "tok-st"
     assert creds["account_id"] == "acct-1"
+    assert creds["cookie_header"] == "tok-st"
+
+
+def test_credentials_keep_tool_cookie_header():
+    creds = credentials_from_payload({
+        "access_token": "tok-at",
+        "cookie_header": "__Secure-next-auth.session-token=st; __cf_bm=burn; oai-did=old",
+    })
+    assert creds["session_token"] == "st"
+    assert "__cf_bm" in creds["cookie_header"]
+
+
+def test_account_cookie_header_resets_cf_and_did():
+    header = account_cookie_header(
+        "__Secure-next-auth.session-token=st; __cf_bm=burn; oai-did=old-did",
+        device_id="new-did",
+    )
+    assert "session-token=st" in header
+    assert "__cf_bm" not in header
+    assert "oai-did=new-did" in header
+    assert "old-did" not in header
+
+
+def test_nested_auth_session_access_token():
     payload = {"auth_session": {"session": {"accessToken": "tok-nested"}}}
     assert access_token_from_payload(payload) == "tok-nested"
 

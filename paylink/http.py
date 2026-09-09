@@ -6,6 +6,17 @@ from typing import Any, Protocol
 from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 CHATGPT_ORIGIN = "https://chatgpt.com"
+# Match gen_pp_link checkout: functional curl_cffi + this UA, impersonate chrome124.
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+)
+IMPERSONATE_CANDIDATES = ("chrome124", "chrome131", "chrome", "chrome146")
+KEEP_COOKIES = (
+    "__Host-next-auth.csrf-token",
+    "__Secure-next-auth.callback-url",
+    "__Secure-next-auth.session-token",
+)
 GEO = {
     "JP": {"lang": "ja", "lang_full": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7"},
     "IN": {"lang": "en-IN", "lang_full": "en-IN,en-US;q=0.9,en;q=0.8"},
@@ -52,34 +63,17 @@ class Transport(Protocol):
     def fetch_text(self, url: str, proxy: str, timeout: int) -> HttpResponse: ...
 
 
-def chrome_profile() -> dict[str, str]:
-    impersonate = "chrome"
+def chatgpt_impersonate() -> str:
     try:
         from curl_cffi.requests.impersonate import BrowserType
 
         supported = {item.value for item in BrowserType}
-        for name in ("chrome146", "chrome145", "chrome136", "chrome131", "chrome124", "chrome"):
-            if name in supported:
-                impersonate = name
-                break
     except Exception:
-        impersonate = "chrome124"
-    version = "".join(ch for ch in impersonate if ch.isdigit()) or "131"
-    return {
-        "impersonate": impersonate,
-        "user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            f"(KHTML, like Gecko) Chrome/{version}.0.0.0 Safari/537.36"
-        ),
-        "sec_ch_ua": f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not.A/Brand";v="99"',
-        "sec_ch_ua_mobile": "?0",
-        "sec_ch_ua_platform": '"Windows"',
-        "version": version,
-    }
-
-
-USER_AGENT = chrome_profile()["user_agent"]
-IMPERSONATE = chrome_profile()["impersonate"]
+        return "chrome124"
+    for name in IMPERSONATE_CANDIDATES:
+        if name in supported:
+            return name
+    return next(iter(supported), "chrome")
 
 
 def normalize_proxy(proxy: str) -> str:
@@ -124,6 +118,33 @@ def pin_proxy_region(proxy: str, country: str) -> str:
     return urlunsplit((parsed.scheme or "http", f"{auth}{host}{port}", parsed.path, parsed.query, parsed.fragment))
 
 
+def account_cookie_header(raw: str, device_id: str = "") -> str:
+    """Minimal per-link Cookie header: NextAuth essentials + this link's oai-did.
+
+    Drops Cloudflare ``__cf_bm`` and any other leftover jar cookies, matching
+    gen_pp_link's request-based checkout (Cookie header only, no Session).
+    """
+    kept: dict[str, str] = {}
+    text = str(raw or "").strip()
+    if text.startswith("eyJ") and "session-token" not in text.lower():
+        kept["__Secure-next-auth.session-token"] = text
+    else:
+        for item in text.split(";"):
+            item = item.strip()
+            if "=" not in item:
+                continue
+            name, value = item.split("=", 1)
+            name = name.strip()
+            value = value.strip()
+            if not value:
+                continue
+            if name in KEEP_COOKIES:
+                kept[name] = value
+    if device_id:
+        kept["oai-did"] = device_id
+    return "; ".join(f"{name}={kept[name]}" for name in (*KEEP_COOKIES, "oai-did") if name in kept)
+
+
 def _proxy_map(proxy: str) -> dict[str, str] | None:
     value = normalize_proxy(proxy)
     if not value:
@@ -131,18 +152,12 @@ def _proxy_map(proxy: str) -> dict[str, str] | None:
     return {"http": value, "https": value}
 
 
-def _session_cookie_value(cookie: str) -> str:
-    raw = str(cookie or "").strip()
-    if not raw:
-        return ""
-    if "session-token" not in raw.lower() and raw.startswith("eyJ"):
-        return raw
-    match = re.search(r"__Secure-next-auth\.session-token=([^;]+)", raw, re.I)
-    return match.group(1).strip() if match else ""
-
-
 class CurlTransport:
-    """One ChatGPT curl session per extract: warmup cookies, then checkout."""
+    """Request-based ChatGPT client like gen_pp_link._checkout_post.
+
+    Each link gets a new device id and a reset Stripe session. ChatGPT calls
+    use curl_cffi's functional API so Cloudflare cookies cannot accumulate.
+    """
 
     def __init__(self) -> None:
         try:
@@ -153,34 +168,22 @@ class CurlTransport:
 
         self._curl = curl_requests
         self._requests = requests
-        self._profile = chrome_profile()
+        self._impersonate = chatgpt_impersonate()
+        self._country = "JP"
+        self._device_id = ""
+        self._session_id = ""
+        self._stripe = None
+        self._stripe_proxy = ""
+        self.reset()
+
+    def reset(self, country: str = "JP") -> None:
+        self._country = (country or "JP").upper()
         self._device_id = str(uuid.uuid4())
         self._session_id = str(uuid.uuid4())
-        self._country = "JP"
-        self._chatgpt = None
-        self._chatgpt_proxy = ""
-        self._stripe = requests.Session()
-        self._stripe.headers["User-Agent"] = self._profile["user_agent"]
+        self._stripe = self._requests.Session()
+        self._stripe.headers["User-Agent"] = USER_AGENT
+        self._stripe.cookies.clear()
         self._stripe_proxy = ""
-
-    def prepare(
-        self,
-        proxy: str,
-        timeout: int,
-        *,
-        cookie: str = "",
-        country: str = "JP",
-        account_id: str = "",
-    ) -> HttpResponse:
-        self._country = (country or "JP").upper()
-        session = self._chatgpt_session(proxy)
-        self._install_cookies(session, cookie)
-        headers = self._headers(html=True, account_id=account_id)
-        try:
-            response = session.get(CHATGPT_ORIGIN + "/", headers=headers, timeout=max(timeout, 15))
-        except Exception as exc:
-            return HttpResponse(599, str(exc))
-        return HttpResponse(response.status_code, response.text)
 
     def chatgpt_post(
         self,
@@ -217,88 +220,66 @@ class CurlTransport:
         body: dict[str, Any] | None = None,
     ) -> HttpResponse:
         url = urljoin(CHATGPT_ORIGIN + "/", path.lstrip("/"))
-        session = self._chatgpt_session(proxy)
-        self._install_cookies(session, cookie)
-        headers = self._headers(html=False, account_id=account_id, token=token)
+        headers = self._headers(account_id=account_id, token=token, cookie=cookie)
+        kwargs: dict[str, Any] = {"headers": headers, "timeout": timeout}
+        proxies = _proxy_map(proxy)
+        if proxies:
+            kwargs["proxies"] = proxies
         try:
-            if method == "POST":
-                response = session.post(url, headers=headers, json=body, timeout=timeout)
+            if self._curl is not None:
+                kwargs["impersonate"] = self._impersonate
+                if method == "POST":
+                    response = self._curl.post(url, json=body, **kwargs)
+                else:
+                    response = self._curl.get(url, **kwargs)
+            elif method == "POST":
+                response = self._requests.post(url, json=body, **kwargs)
             else:
-                response = session.get(url, headers=headers, timeout=timeout)
+                response = self._requests.get(url, **kwargs)
+        except TypeError:
+            kwargs.pop("impersonate", None)
+            if self._curl is None:
+                return HttpResponse(599, "curl_cffi missing")
+            if method == "POST":
+                response = self._curl.post(url, json=body, impersonate="chrome", **kwargs)
+            else:
+                response = self._curl.get(url, impersonate="chrome", **kwargs)
         except Exception as exc:
             return HttpResponse(599, str(exc))
         return HttpResponse(response.status_code, response.text)
 
-    def _chatgpt_session(self, proxy: str):
-        key = normalize_proxy(proxy)
-        if self._chatgpt is not None and key == self._chatgpt_proxy:
-            return self._chatgpt
-        impersonate = self._profile["impersonate"]
-        proxies = _proxy_map(proxy) or {}
-        if self._curl is not None:
-            try:
-                session = self._curl.Session(impersonate=impersonate)
-            except Exception:
-                session = self._curl.Session(impersonate="chrome")
-        else:
-            session = self._requests.Session()
-        session.headers["User-Agent"] = self._profile["user_agent"]
-        if hasattr(session, "proxies"):
-            session.proxies.clear()
-            session.proxies.update(proxies)
-        self._chatgpt = session
-        self._chatgpt_proxy = key
-        return session
-
-    def _install_cookies(self, session, cookie: str) -> None:
-        token = _session_cookie_value(cookie)
-        if token:
-            self._set_cookie(session, "__Secure-next-auth.session-token", token)
-        self._set_cookie(session, "oai-did", self._device_id)
-
-    def _set_cookie(self, session, name: str, value: str) -> None:
-        if not value:
-            return
-        try:
-            session.cookies.set(name, value, domain="chatgpt.com", path="/")
-        except Exception:
-            session.cookies.set(name, value)
-
-    def _headers(self, *, html: bool, account_id: str = "", token: str = "") -> dict[str, str]:
+    def _headers(self, *, account_id: str = "", token: str = "", cookie: str = "") -> dict[str, str]:
         geo = GEO.get(self._country) or GEO["US"]
-        profile = self._profile
         headers = {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" if html else "application/json",
+            "Accept": "application/json",
             "Accept-Language": geo["lang_full"],
+            "Content-Type": "application/json",
             "Origin": CHATGPT_ORIGIN,
             "Referer": "https://chatgpt.com/",
-            "User-Agent": profile["user_agent"],
-            "sec-ch-ua": profile["sec_ch_ua"],
-            "sec-ch-ua-mobile": profile["sec_ch_ua_mobile"],
-            "sec-ch-ua-platform": profile["sec_ch_ua_platform"],
-            "sec-fetch-dest": "document" if html else "empty",
-            "sec-fetch-mode": "navigate" if html else "cors",
-            "sec-fetch-site": "same-origin",
+            "User-Agent": USER_AGENT,
             "oai-device-id": self._device_id,
             "oai-language": geo["lang"],
             "oai-session-id": self._session_id,
         }
-        if not html:
-            headers["Content-Type"] = "application/json"
-            headers["oai-client-build-number"] = "8370486"
         if token:
             headers["Authorization"] = f"Bearer {token}"
         if account_id:
             headers["Chatgpt-Account-Id"] = account_id
+        cookie_header = account_cookie_header(cookie, self._device_id)
+        if cookie_header:
+            headers["Cookie"] = cookie_header
         return headers
 
     def _stripe_session(self, proxy: str):
+        if self._stripe is None:
+            self.reset(self._country)
         mapped = _proxy_map(proxy)
         key = normalize_proxy(proxy)
         if key != self._stripe_proxy:
             self._stripe.proxies.clear()
             if mapped:
                 self._stripe.proxies.update(mapped)
+            self._stripe.cookies.clear()
             self._stripe_proxy = key
         return self._stripe
 

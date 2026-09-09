@@ -16,14 +16,16 @@ def session_token_from_payload(data: Any) -> str:
 
 def credentials_from_payload(data: Any) -> dict[str, str]:
     """Read ChatGPT web session JSON (accessToken + sessionToken) or tool session files."""
+    empty = {"access_token": "", "session_token": "", "account_id": "", "cookie_header": ""}
     if isinstance(data, str):
         text = data.strip()
         if text.startswith("{") or text.startswith("["):
             data = json.loads(text)
         else:
-            return {"access_token": text if _looks_token(text) else "", "session_token": "", "account_id": ""}
+            token = text if _looks_token(text) else ""
+            return {**empty, "access_token": token}
     if not isinstance(data, dict):
-        return {"access_token": "", "session_token": "", "account_id": ""}
+        return empty
 
     access = str(
         data.get("access_token")
@@ -33,6 +35,11 @@ def credentials_from_payload(data: Any) -> dict[str, str]:
     session = str(
         data.get("session_token")
         or data.get("sessionToken")
+        or ""
+    ).strip()
+    cookie_header = str(
+        data.get("cookie_header")
+        or data.get("cookie")
         or ""
     ).strip()
     account = data.get("account") if isinstance(data.get("account"), dict) else {}
@@ -53,14 +60,28 @@ def credentials_from_payload(data: Any) -> dict[str, str]:
                     break
     if not session:
         session = str(auth_session.get("sessionToken") or auth_session.get("session_token") or "").strip()
-    return {"access_token": access, "session_token": session, "account_id": account_id}
+    if not cookie_header:
+        cookie_header = str(auth_session.get("cookie_header") or auth_session.get("cookie") or "").strip()
+    if not session and "session-token=" in cookie_header.lower():
+        for item in cookie_header.split(";"):
+            if "__secure-next-auth.session-token=" in item.lower():
+                session = item.split("=", 1)[1].strip()
+                break
+    if not cookie_header and session:
+        cookie_header = session
+    return {
+        "access_token": access,
+        "session_token": session,
+        "account_id": account_id,
+        "cookie_header": cookie_header,
+    }
 
 
 def credentials_from_path(path: str | Path) -> dict[str, str]:
     source = Path(path)
     payload = json.loads(source.read_text(encoding="utf-8-sig"))
     creds = credentials_from_payload(payload)
-    if not creds["access_token"] and not creds["session_token"]:
+    if not creds["access_token"] and not creds["session_token"] and not creds["cookie_header"]:
         raise ValueError(f"no access_token/sessionToken in {source}")
     return creds
 

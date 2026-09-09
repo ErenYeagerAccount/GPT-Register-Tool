@@ -65,7 +65,7 @@ def _jobs(args) -> list[dict[str, str]]:
         jobs.append({
             "source": str(args.session),
             "token": creds["access_token"],
-            "cookie": creds["session_token"],
+            "cookie": creds.get("cookie_header") or creds["session_token"],
             "account_id": creds["account_id"],
         })
     if args.sessions_dir:
@@ -76,7 +76,7 @@ def _jobs(args) -> list[dict[str, str]]:
                 jobs.append({
                     "source": str(path),
                     "token": creds["access_token"],
-                    "cookie": creds["session_token"],
+                    "cookie": creds.get("cookie_header") or creds["session_token"],
                     "account_id": creds["account_id"],
                 })
             except (OSError, ValueError, json.JSONDecodeError):

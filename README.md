@@ -130,7 +130,7 @@ python -m paylink --sessions-dir .\sessions --proxy "http://HOST:PORT" --workers
 
 Cliproxy `host:port:user:pass` lines are converted to a normal proxy URL. If the username contains `region-XX`, checkout rewrites it to `--checkout-country` (JP by default). Use a long sticky session (`-t-30`), not `-t-1`.
 
-The client warms up `chatgpt.com` on one curl session (device id, locale, matching Chrome TLS/UA) before checkout. A ChatGPT `unusual_activity` response is OpenAI's risk check; the tool cannot override it. Wait and retry from a residential JP exit on your machine — do not hammer checkout.
+ChatGPT calls use the same request-based curl_cffi path as `gen_pp_link` (no cookie jar). Each link resets cookies and sends only NextAuth essentials plus a fresh `oai-did`. A ChatGPT `unusual_activity` response is OpenAI's risk check; the tool cannot override it. Wait and retry from a residential JP exit on your machine — do not hammer checkout.
 
 A dead token fails immediately with `checkout_unauthorized`. Non-zero due fails with `no_free_trial`.
 

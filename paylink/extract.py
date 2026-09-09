@@ -96,14 +96,8 @@ def extract_upi_link(
             error_stage="auth",
         )
     client = transport or CurlTransport()
-    if hasattr(client, "prepare"):
-        client.prepare(
-            cfg.checkout_proxy,
-            cfg.chatgpt_timeout,
-            cookie=cfg.cookie,
-            country=cfg.checkout_country,
-            account_id=cfg.account_id,
-        )
+    if hasattr(client, "reset"):
+        client.reset(cfg.checkout_country)
     if cfg.cookie and hasattr(client, "chatgpt_get"):
         session = client.chatgpt_get(
             "/api/auth/session",
