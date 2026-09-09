@@ -12,18 +12,19 @@ from .session import access_token_from_path
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="paylink",
-        description="Extract ChatGPT UPI protocol payment links from an access token or session JSON.",
+        description="Fast 0₹ ChatGPT Stripe checkout links from an access token. Optional --upi for the UPI deep link.",
     )
     parser.add_argument("--token", help="ChatGPT access token")
     parser.add_argument("--session", help="Path to a session JSON that already contains an access_token")
     parser.add_argument("--sessions-dir", help="Directory of session_*.json files for batch extract")
-    parser.add_argument("--proxy", default="", help="Single proxy for every stage")
+    parser.add_argument("--proxy", default="", help="Proxy for every stage (http://host:port or socks5h://...)")
     parser.add_argument("--checkout-proxy", default="", help="ChatGPT checkout proxy")
     parser.add_argument("--provider-proxy", default="", help="Stripe init/confirm/poll proxy")
     parser.add_argument("--approve-proxy", default="", help="ChatGPT approve proxy")
-    parser.add_argument("--checkout-country", default="IN")
+    parser.add_argument("--checkout-country", default="JP", help="Checkout billing country. JP is the 0₹ trial default.")
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--allow-nonzero", action="store_true", help="Do not require a zero-due / trial checkout")
+    parser.add_argument("--upi", action="store_true", help="Continue past Stripe init to extract a upi:// deep link")
+    parser.add_argument("--allow-nonzero", action="store_true", help="Do not require a 0 due checkout")
     parser.add_argument("--no-hosted-fallback", action="store_true")
     args = parser.parse_args(argv)
 
@@ -38,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
         checkout_country=args.checkout_country,
         require_zero_due=not args.allow_nonzero,
         allow_hosted_fallback=not args.no_hosted_fallback,
+        mode="upi" if args.upi else "fast",
     )
     workers = max(1, min(int(args.workers or 1), 8, len(jobs)))
     results = []

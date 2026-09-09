@@ -8,8 +8,7 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 )
 CHATGPT_ORIGIN = "https://chatgpt.com"
-STRIPE_ORIGIN = "https://api.stripe.com"
-IMPERSONATE = "chrome"
+IMPERSONATE = "chrome146"
 
 
 class HttpResponse:
@@ -33,15 +32,24 @@ class Transport(Protocol):
     def fetch_text(self, url: str, proxy: str, timeout: int) -> HttpResponse: ...
 
 
-def _proxy_map(proxy: str) -> dict[str, str] | None:
+def normalize_proxy(proxy: str) -> str:
     value = str(proxy or "").strip()
+    if not value:
+        return ""
+    if "://" not in value:
+        return f"http://{value}"
+    return value
+
+
+def _proxy_map(proxy: str) -> dict[str, str] | None:
+    value = normalize_proxy(proxy)
     if not value:
         return None
     return {"http": value, "https": value}
 
 
 class CurlTransport:
-    """curl_cffi ChatGPT calls + requests for Stripe, matching the UPI split-proxy model."""
+    """Keep-alive ChatGPT + Stripe sessions so a token finishes in a few round trips."""
 
     def __init__(self) -> None:
         try:
@@ -52,6 +60,9 @@ class CurlTransport:
 
         self._curl = curl_requests
         self._requests = requests
+        self._stripe = requests.Session()
+        self._stripe.headers["User-Agent"] = USER_AGENT
+        self._stripe_proxy = ""
 
     def chatgpt_post(self, path: str, body: dict[str, Any], token: str, proxy: str, timeout: int) -> HttpResponse:
         url = urljoin(CHATGPT_ORIGIN + "/", path.lstrip("/"))
@@ -65,39 +76,49 @@ class CurlTransport:
         }
         kwargs: dict[str, Any] = {"headers": headers, "json": body, "timeout": timeout}
         proxies = _proxy_map(proxy)
-        if self._curl is not None:
-            if proxies:
-                kwargs["proxies"] = proxies
-            response = self._curl.post(url, impersonate=IMPERSONATE, **kwargs)
-        else:
-            if proxies:
-                kwargs["proxies"] = proxies
-            response = self._requests.post(url, **kwargs)
+        try:
+            if self._curl is not None:
+                if proxies:
+                    kwargs["proxies"] = proxies
+                try:
+                    response = self._curl.post(url, impersonate=IMPERSONATE, **kwargs)
+                except Exception:
+                    response = self._curl.post(url, impersonate="chrome", **kwargs)
+            else:
+                if proxies:
+                    kwargs["proxies"] = proxies
+                response = self._requests.post(url, **kwargs)
+        except Exception as exc:
+            return HttpResponse(599, str(exc))
         return HttpResponse(response.status_code, response.text)
 
+    def _stripe_session(self, proxy: str):
+        mapped = _proxy_map(proxy)
+        key = normalize_proxy(proxy)
+        if key != self._stripe_proxy:
+            self._stripe.proxies.clear()
+            if mapped:
+                self._stripe.proxies.update(mapped)
+            self._stripe_proxy = key
+        return self._stripe
+
     def stripe_post(self, url: str, data: dict[str, str], proxy: str, timeout: int) -> HttpResponse:
-        session = self._requests.Session()
-        session.headers["User-Agent"] = USER_AGENT
-        proxies = _proxy_map(proxy)
-        if proxies:
-            session.proxies.update(proxies)
-        response = session.post(url, data=data, timeout=timeout)
+        try:
+            response = self._stripe_session(proxy).post(url, data=data, timeout=timeout)
+        except Exception as exc:
+            return HttpResponse(599, str(exc))
         return HttpResponse(response.status_code, response.text)
 
     def stripe_get(self, url: str, params: dict[str, str], proxy: str, timeout: int) -> HttpResponse:
-        session = self._requests.Session()
-        session.headers["User-Agent"] = USER_AGENT
-        proxies = _proxy_map(proxy)
-        if proxies:
-            session.proxies.update(proxies)
-        response = session.get(url, params=params, timeout=timeout)
+        try:
+            response = self._stripe_session(proxy).get(url, params=params, timeout=timeout)
+        except Exception as exc:
+            return HttpResponse(599, str(exc))
         return HttpResponse(response.status_code, response.text)
 
     def fetch_text(self, url: str, proxy: str, timeout: int) -> HttpResponse:
-        session = self._requests.Session()
-        session.headers["User-Agent"] = USER_AGENT
-        proxies = _proxy_map(proxy)
-        if proxies:
-            session.proxies.update(proxies)
-        response = session.get(url, timeout=timeout)
+        try:
+            response = self._stripe_session(proxy).get(url, timeout=timeout)
+        except Exception as exc:
+            return HttpResponse(599, str(exc))
         return HttpResponse(response.status_code, response.text)

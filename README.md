@@ -117,17 +117,17 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 Environment variables take precedence over `config.json`. API Keys saved through the desktop Settings page are written only to the local, Git-ignored `config.json`.
 
-### UPI payment-link CLI (no registration)
+### Payment-link CLI (0₹ Stripe, no registration)
 
-`paylink` is a standalone extractor. It does not register accounts, poll mailboxes, or launch the WPF app. Give it an existing ChatGPT access token (or a session JSON that already contains one) and it runs the UPI checkout → Stripe confirm → approve → poll path.
+`paylink` only creates a checkout link from an existing ChatGPT access token. Default mode is fast: Japan checkout + Stripe init, then return the hosted `pay.openai.com` URL when due is **0**. Add `--upi` only if you also need a `upi://` deep link.
 
 ```powershell
-python -m paylink --token "ACCESS_TOKEN" --proxy "http://127.0.0.1:7897"
-python -m paylink --session .\sessions\session_example.json
-python -m paylink --sessions-dir .\sessions --workers 4
+python -m paylink --token "ACCESS_TOKEN" --proxy "http://HOST:PORT"
+python -m paylink --token "ACCESS_TOKEN" --proxy "http://HOST:PORT" --upi
+python -m paylink --sessions-dir .\sessions --proxy "http://HOST:PORT" --workers 4
 ```
 
-Each line of stdout is one JSON result. A `upi://` deep link is preferred; otherwise a hosted checkout URL is returned.
+A dead token fails immediately with `checkout_unauthorized`. Non-zero due fails with `no_free_trial`.
 
 ## Key Features
 
