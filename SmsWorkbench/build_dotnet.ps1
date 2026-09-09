@@ -15,13 +15,19 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $dotnet = Join-Path $repoRoot ".dotnet\dotnet.exe"
 if (-not (Test-Path $dotnet)) {
-    $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+    $pathDotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($pathDotnet) {
+        $dotnet = if ($pathDotnet.Path) { $pathDotnet.Path } else { $pathDotnet.Source }
+    } else {
+        $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
+    }
 }
-if (-not (Test-Path $dotnet)) {
+if (-not (Test-Path $dotnet) -and $dotnet -ne "dotnet") {
     $dotnet = "dotnet"
 }
 
-$requiredSdk = (Get-Content (Join-Path $repoRoot "global.json") -Raw | ConvertFrom-Json).sdk.version
+$sdkConfig = Get-Content (Join-Path $repoRoot "global.json") -Raw | ConvertFrom-Json
+$requiredSdk = [string]$sdkConfig.sdk.version
 try {
     $versionOutput = & $dotnet --version 2>&1
     if ($LASTEXITCODE -ne 0) { throw "dotnet host returned exit code $LASTEXITCODE" }
@@ -30,9 +36,16 @@ try {
 }
 $requiredParts = [string]$requiredSdk -split '\.'
 $actualParts = [string]$versionOutput -split '\.'
-$compatibleFeatureBand = $requiredParts.Length -ge 3 -and $actualParts.Length -ge 3 -and
-    $requiredParts[0] -eq $actualParts[0] -and $requiredParts[1] -eq $actualParts[1] -and
+$rollForward = [string]$sdkConfig.sdk.rollForward
+$sameMajorMinor = $requiredParts.Length -ge 2 -and $actualParts.Length -ge 2 -and
+    $requiredParts[0] -eq $actualParts[0] -and $requiredParts[1] -eq $actualParts[1]
+$sameFeatureBand = $sameMajorMinor -and $requiredParts.Length -ge 3 -and $actualParts.Length -ge 3 -and
     $requiredParts[2].Substring(0, 2) -eq $actualParts[2].Substring(0, 2)
+$compatibleFeatureBand = if ($rollForward -in @("latestMinor", "latestMajor")) {
+    $sameMajorMinor
+} else {
+    $sameFeatureBand
+}
 if (-not $compatibleFeatureBand) {
     throw "Required .NET SDK feature band $requiredSdk, found '$versionOutput' at '$dotnet'"
 }
