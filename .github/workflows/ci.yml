@@ -21,7 +21,7 @@ jobs:
         run: Copy-Item config.example.json config.json
       - shell: powershell
         run: .\scripts\environment_preflight.ps1
-      - run: python -m compileall -q sms_tool services
+      - run: python -m compileall -q sms_tool services paylink
       - run: python -m pytest --collect-only -q
       - run: python -m pytest -q
       - run: dotnet test GPTRegisterTool.slnx -c Release

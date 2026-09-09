@@ -117,6 +117,18 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 Environment variables take precedence over `config.json`. API Keys saved through the desktop Settings page are written only to the local, Git-ignored `config.json`.
 
+### UPI payment-link CLI (no registration)
+
+`paylink` is a standalone extractor. It does not register accounts, poll mailboxes, or launch the WPF app. Give it an existing ChatGPT access token (or a session JSON that already contains one) and it runs the UPI checkout → Stripe confirm → approve → poll path.
+
+```powershell
+python -m paylink --token "ACCESS_TOKEN" --proxy "http://127.0.0.1:7897"
+python -m paylink --session .\sessions\session_example.json
+python -m paylink --sessions-dir .\sessions --workers 4
+```
+
+Each line of stdout is one JSON result. A `upi://` deep link is preferred; otherwise a hosted checkout URL is returned.
+
 ## Key Features
 
 ### One-Click Registration
