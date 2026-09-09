@@ -134,6 +134,15 @@ ChatGPT calls use the same request-based curl_cffi path as `gen_pp_link` (no coo
 
 A dead token fails immediately with `checkout_unauthorized`. Non-zero due fails with `no_free_trial`.
 
+### Local web console (GPT UPI CHECKOUT BY LEVALZ)
+
+```powershell
+python -m paylink --web
+python -m paylink.web --port 8765
+```
+
+Open `http://127.0.0.1:8765/`. The console is bound to localhost. Paste `/api/auth/session` JSON (or load `.json` files), set the Cliproxy line, choose Fast or UPI, then extract. Inspect Session and Preview Proxy do not call ChatGPT checkout. Sessions are not written to disk.
+
 ## Key Features
 
 ### One-Click Registration

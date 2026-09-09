@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GPT UPI CHECKOUT BY LEVALZ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #14110c;
+      --paper: #f4efe4;
+      --panel: #fffdf8;
+      --line: #d9d0c0;
+      --muted: #6f675c;
+      --gold: #b8872a;
+      --gold-deep: #8c6418;
+      --good: #1f7a4d;
+      --bad: #a33b2b;
+      --shadow: 0 24px 50px rgba(20, 17, 12, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Manrope, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, rgba(184, 135, 42, 0.16), transparent 55%),
+        linear-gradient(180deg, #f7f3ea 0%, var(--paper) 40%, #efe8d9 100%);
+    }
+    .shell { max-width: 1180px; margin: 0 auto; padding: 28px 22px 64px; }
+    header {
+      display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+      padding-bottom: 22px; border-bottom: 1px solid var(--line); margin-bottom: 28px;
+    }
+    .mark {
+      width: 46px; height: 46px; border: 1px solid var(--ink); display: grid; place-items: center;
+      font-family: "Instrument Serif", serif; font-size: 22px; background: var(--gold); color: var(--ink);
+    }
+    .brand { display: flex; gap: 14px; align-items: center; }
+    h1 {
+      font-family: "Instrument Serif", serif; font-size: 34px; font-weight: 400;
+      letter-spacing: 0.04em; margin: 0 0 4px; line-height: 1;
+    }
+    .kicker { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold-deep); margin: 0 0 8px; }
+    .sub { margin: 0; color: var(--muted); font-size: 14px; }
+    .meta { text-align: right; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .layout { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 22px; }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      header { flex-direction: column; align-items: flex-start; }
+      .meta { text-align: left; }
+    }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); padding: 22px;
+    }
+    h2 { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; margin: 0 0 16px; color: var(--gold-deep); }
+    label { display: block; font-size: 12px; font-weight: 600; margin: 14px 0 6px; }
+    input, select, textarea {
+      width: 100%; border: 1px solid var(--line); background: #fffcf6; color: var(--ink);
+      font: 14px/1.45 Manrope, sans-serif; padding: 10px 12px; border-radius: 0;
+    }
+    textarea { min-height: 168px; font-family: "IBM Plex Mono", monospace; font-size: 12px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .checks { display: grid; gap: 8px; margin-top: 14px; }
+    .check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink); }
+    .check input { width: auto; margin-top: 3px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    button {
+      border: 0; cursor: pointer; font: 600 13px/1 Manrope, sans-serif; letter-spacing: 0.08em;
+      text-transform: uppercase; padding: 12px 16px;
+    }
+    .primary { background: var(--ink); color: var(--paper); }
+    .primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .ghost { background: transparent; border: 1px solid var(--ink); color: var(--ink); }
+    .hint { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    .status { min-height: 22px; font-size: 13px; margin-bottom: 12px; }
+    .result {
+      border-top: 1px solid var(--line); padding: 14px 0; display: grid; gap: 8px;
+    }
+    .result:first-of-type { border-top: 0; padding-top: 0; }
+    .badge {
+      display: inline-block; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 4px 8px; border: 1px solid currentColor;
+    }
+    .ok { color: var(--good); }
+    .fail { color: var(--bad); }
+    .url {
+      font-family: "IBM Plex Mono", monospace; font-size: 12px; word-break: break-all;
+      background: #f3eee3; padding: 10px; border: 1px solid var(--line);
+    }
+    .empty { color: var(--muted); font-size: 14px; padding: 28px 0; }
+    details { margin-top: 8px; }
+    summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+    footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <div class="mark">L</div>
+        <div>
+          <p class="kicker">Local console · 127.0.0.1</p>
+          <h1>GPT UPI CHECKOUT BY LEVALZ</h1>
+          <p class="sub">Session in. Checkout out. Fast Stripe URL or UPI deep link — cookies reset on every run.</p>
+        </div>
+      </div>
+      <div class="meta">
+        Request-based ChatGPT client<br />
+        Cliproxy host:port:user:pass<br />
+        Sessions never written to disk
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="card">
+        <h2>Workspace</h2>
+        <label for="sessions">ChatGPT session JSON</label>
+        <textarea id="sessions" placeholder='Paste /api/auth/session JSON. Multiple objects are accepted. sessionToken is required.'></textarea>
+        <div class="row">
+          <div>
+            <label for="files">Or load .json files</label>
+            <input id="files" type="file" accept=".json,application/json" multiple />
+          </div>
+          <div>
+            <label for="token">Access token (optional extra)</label>
+            <input id="token" type="password" autocomplete="off" placeholder="eyJ..." />
+          </div>
+        </div>
+        <label for="proxy">Proxy</label>
+        <input id="proxy" placeholder="us2.cliproxy.io:3010:USER:PASS or http://user:pass@host:port" />
+        <div class="row">
+          <div>
+            <label for="country">Checkout country</label>
+            <select id="country">
+              <option value="JP" selected>Japan (JP) — 0₹ trial default</option>
+              <option value="IN">India (IN)</option>
+              <option value="US">United States (US)</option>
+              <option value="SG">Singapore (SG)</option>
+              <option value="TH">Thailand (TH)</option>
+            </select>
+          </div>
+          <div>
+            <label for="mode">Link type</label>
+            <select id="mode">
+              <option value="fast" selected>Fast — pay.openai.com (0 due)</option>
+              <option value="upi">UPI — upi:// deep link</option>
+            </select>
+          </div>
+        </div>
+        <details>
+          <summary>Advanced proxies and options</summary>
+          <div class="row">
+            <div>
+              <label for="checkoutProxy">Checkout proxy</label>
+              <input id="checkoutProxy" placeholder="Overrides shared proxy for ChatGPT" />
+            </div>
+            <div>
+              <label for="providerProxy">Stripe proxy</label>
+              <input id="providerProxy" placeholder="Overrides shared proxy for Stripe" />
+            </div>
+          </div>
+          <label for="approveProxy">Approve proxy</label>
+          <input id="approveProxy" placeholder="UPI approve stage" />
+          <div class="row">
+            <div>
+              <label for="workers">Batch workers</label>
+              <input id="workers" type="number" min="1" max="8" value="4" />
+            </div>
+            <div class="checks" style="margin-top: 28px;">
+              <label class="check"><input id="allowNonzero" type="checkbox" /> Allow non-zero due</label>
+              <label class="check"><input id="noFallback" type="checkbox" /> Disable hosted fallback</label>
+            </div>
+          </div>
+        </details>
+        <p class="hint">Use a long JP sticky session (−t-30). Unusual activity is OpenAI’s risk check, not a missing URL.</p>
+        <div class="actions">
+          <button class="ghost" id="inspectBtn" type="button">Inspect session</button>
+          <button class="ghost" id="previewBtn" type="button">Preview proxy</button>
+          <button class="primary" id="extractBtn" type="button">Extract checkout link</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Results</h2>
+        <div class="status" id="status">Ready. Localhost only.</div>
+        <div id="results"><p class="empty">No extract yet. Inspect first to confirm sessionToken is present.</p></div>
+      </section>
+    </div>
+    <footer>GPT UPI CHECKOUT BY LEVALZ · paylink web console · does not register accounts</footer>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+    const resultsEl = $("results");
+
+    $("files").addEventListener("change", async (event) => {
+      const files = [...event.target.files];
+      const chunks = [];
+      for (const file of files) chunks.push(await file.text());
+      const current = $("sessions").value.trim();
+      $("sessions").value = [current, ...chunks].filter(Boolean).join("\n\n");
+    });
+
+    $("inspectBtn").addEventListener("click", () => run("/api/inspect", payload(), "Inspecting…"));
+    $("previewBtn").addEventListener("click", () => run("/api/preview-proxy", payload(), "Checking proxy…", renderPreview));
+    $("extractBtn").addEventListener("click", () => run("/api/extract", payload(), "Extracting checkout…", renderExtract, true));
+
+    function payload() {
+      return {
+        sessions: $("sessions").value,
+        token: $("token").value,
+        proxy: $("proxy").value,
+        checkout_proxy: $("checkoutProxy").value,
+        provider_proxy: $("providerProxy").value,
+        approve_proxy: $("approveProxy").value,
+        checkout_country: $("country").value,
+        mode: $("mode").value,
+        upi: $("mode").value === "upi",
+        allow_nonzero: $("allowNonzero").checked,
+        no_hosted_fallback: $("noFallback").checked,
+        workers: Number($("workers").value || 1),
+      };
+    }
+
+    async function run(path, body, waiting, renderer, lock) {
+      const extractBtn = $("extractBtn");
+      if (lock) extractBtn.disabled = true;
+      statusEl.textContent = waiting;
+      try {
+        const response = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await response.json();
+        (renderer || renderInspect)(data);
+      } catch (error) {
+        statusEl.innerHTML = `<span class="fail">Request failed.</span>`;
+        resultsEl.innerHTML = `<p class="empty">${escapeHtml(error.message || "network error")}</p>`;
+      } finally {
+        extractBtn.disabled = false;
+      }
+    }
+
+    function renderInspect(data) {
+      const rows = data.results || [];
+      if (!rows.length) {
+        statusEl.innerHTML = `<span class="fail">${escapeHtml(data.error || "missing_session")}</span>`;
+        resultsEl.innerHTML = `<p class="empty">Paste a session JSON or choose files.</p>`;
+        return;
+      }
+      const good = rows.filter((row) => row.ok).length;
+      statusEl.textContent = `Inspected ${rows.length} session(s), ${good} ready.`;
+      resultsEl.innerHTML = rows.map((row) => `
+        <article class="result">
+          <div><span class="badge ${row.ok ? "ok" : "fail"}">${row.ok ? "ready" : "blocked"}</span> ${escapeHtml(row.source || "")}</div>
+          <div class="hint">token ${row.has_access_token ? "yes" : "no"} · session cookie ${row.has_session_cookie ? "yes" : "no"} · account ${escapeHtml(row.account_id || "—")}</div>
+          ${row.error_code ? `<div class="fail">${escapeHtml(row.error_code)}</div>` : ""}
+        </article>
+      `).join("");
+    }
+
+    function renderPreview(data) {
+      statusEl.textContent = "Proxy preview (credentials redacted).";
+      resultsEl.innerHTML = `
+        <article class="result">
+          <div>Normalized</div>
+          <div class="url">${escapeHtml(data.normalized || "(none)")}</div>
+          <div>Checkout pinned · ${escapeHtml(data.country || "")}</div>
+          <div class="url">${escapeHtml(data.checkout_pinned || "(none)")}</div>
+        </article>`;
+    }
+
+    function renderExtract(data) {
+      const rows = data.results || [];
+      if (!rows.length) {
+        statusEl.innerHTML = `<span class="fail">${escapeHtml(data.error || "missing_session")}</span>`;
+        resultsEl.innerHTML = `<p class="empty">Nothing to extract.</p>`;
+        return;
+      }
+      const ok = rows.filter((row) => row.ok).length;
+      statusEl.innerHTML = ok === rows.length
+        ? `<span class="ok">${ok}/${rows.length} extracted.</span>`
+        : `<span class="fail">${ok}/${rows.length} extracted.</span>`;
+      resultsEl.innerHTML = rows.map((row) => {
+        const url = row.url || row.upi_uri || row.hosted_url || "";
+        return `
+          <article class="result">
+            <div><span class="badge ${row.ok ? "ok" : "fail"}">${escapeHtml(row.link_type || row.error_code || row.status || "result")}</span> ${escapeHtml(row.source || "")}</div>
+            ${url ? `<div class="url">${escapeHtml(url)}</div><button class="ghost" type="button" data-copy="${escapeAttr(url)}">Copy link</button>` : ""}
+            ${row.error ? `<div class="fail">${escapeHtml(row.error)}</div>` : ""}
+            <div class="hint">${escapeHtml([row.cs_id, row.currency, row.amount != null ? String(row.amount) : ""].filter(Boolean).join(" · "))}</div>
+          </article>`;
+      }).join("");
+      resultsEl.querySelectorAll("[data-copy]").forEach((button) => {
+        button.addEventListener("click", () => navigator.clipboard.writeText(button.dataset.copy));
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#96;");
+    }
+  </script>
+</body>
+</html>

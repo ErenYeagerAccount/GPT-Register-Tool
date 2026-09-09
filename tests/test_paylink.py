@@ -196,10 +196,31 @@ def test_cli_fast_json(tmp_path: Path, capsys):
     session = tmp_path / "session.json"
     session.write_text(json.dumps({"access_token": "tok"}), encoding="utf-8")
     transport = FakeTransport()
-    with patch("paylink.cli.extract_upi_link", lambda token, settings: extract_upi_link(token, settings=settings, transport=transport, sleep=lambda _seconds: None)):
+    with patch("paylink.service.extract_upi_link", lambda token, settings: extract_upi_link(token, settings=settings, transport=transport, sleep=lambda _seconds: None)):
         code = main(["--session", str(session), "--proxy", "127.0.0.1:7897"])
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert code == 0
     assert payload["ok"] is True
     assert payload["link_type"] == "stripe_zero_due"
+
+
+def test_inspect_and_proxy_preview():
+    from paylink.service import inspect_job, job_from_session, preview_proxy
+    from paylink.web import _jobs_from_body
+
+    job = job_from_session(
+        {"accessToken": "tok-at", "sessionToken": "tok-st", "account": {"id": "acct-1"}},
+        "session-1",
+    )
+    info = inspect_job(job)
+    assert info["ok"] is True
+    assert info["has_session_cookie"] is True
+    preview = preview_proxy("us2.cliproxy.io:3010:user-region-IN-sid-abc-t-30:secret", "JP")
+    assert "***" in preview["normalized"]
+    assert "region-JP" in preview["checkout_pinned"]
+    jobs = _jobs_from_body({
+        "sessions": '{"sessionToken":"aaa"}\n{"sessionToken":"bbb"}',
+        "token": "",
+    })
+    assert len(jobs) == 2
